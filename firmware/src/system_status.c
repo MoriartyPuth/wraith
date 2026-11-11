@@ -63,6 +63,13 @@ static void emit_status(void)
     }
 }
 
+static bool s_announce;
+
+void system_status_request_announce(void)
+{
+    __atomic_store_n(&s_announce, true, __ATOMIC_RELAXED);
+}
+
 void system_status_set_state(sensor_state_t state, const char *message)
 {
     taskENTER_CRITICAL(&s_lock);
@@ -107,7 +114,7 @@ static void status_task(void *arg)
             transport_send(buf, len);
         }
         since_status_ms += WRAITH_HEARTBEAT_INTERVAL_MS;
-        if (since_status_ms >= WRAITH_STATUS_INTERVAL_MS) {
+        if (__atomic_exchange_n(&s_announce, false, __ATOMIC_RELAXED) || since_status_ms >= WRAITH_STATUS_INTERVAL_MS) {
             since_status_ms = 0;
             emit_status();
         }

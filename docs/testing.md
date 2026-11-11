@@ -71,10 +71,25 @@ under `-race`.
 - Real finding: `rogue_ap_indicator` (low) on a neighbouring network; review
   via PATCH succeeded; form-encoded PATCH refused (415).
 
+## Phase 5 (2026-11-11, hardware)
+
+- LCD: detected at 0x27, WRAITH screens confirmed by the user.
+- systemd user service: Core main PID with dialout, by-id device, dashboard
+  on :8088; status announce on host connect (`online` within 12 s).
+- Deauth/disassoc on hardware: phone leaving own network "Bo" →
+  `wifi.disassoc_observed`, reason 8, unprotected, −47…−65 dBm; below the
+  burst threshold, so correctly no finding.
+- Unplug/replug ×2: link error at once; reopen ≤ 5 s after the device
+  reappeared; read stalled after the replay burst both times and the stall
+  watchdog reopened it; sensor online again 16–19 s after replugging.
+- An earlier cable disturbance left the CP2102 failing every transfer
+  (kernel `urb status -71`) until physically replugged; not recoverable in
+  software.
+
 ## Not yet tested
 
-- Deauth/disassoc reporting on hardware (no such frames occurred).
-- Any detector firing on real traffic.
+- Deauthentication *burst* findings on real traffic (needs many frames; WRAITH
+  does not generate them).
 - LCD (disabled pending electrical verification).
 - Dashboard rendering with populated data was not screenshotted (headless
   Firefox captures before fetches resolve); empty/loading states were inspected.

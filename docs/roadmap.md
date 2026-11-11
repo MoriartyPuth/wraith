@@ -90,7 +90,21 @@ client (e.g. disconnect a phone from your own 2.4 GHz network).
 | Firmware: CRC-32 suffix | IMPLEMENTED — TESTED (host + hardware) |
 | Detector fix: rogue indicator on "auth became known", graded severity | IMPLEMENTED — TESTED + first real finding |
 
-## Phase 5 — Integration · Phase 6 — Validation
+## Phase 5 — Integration ✅ (2026-11-11, awaiting approval for Phase 6)
 
-See prompt plan: end-to-end ESP32 → Core → Web, reconnect behavior,
-systemd unit, controlled lab tests on owned APs, false-positive evaluation.
+| Item | Status |
+|------|--------|
+| LCD driver (PCF8574/HD44780, address auto-detect, 4 screens, own task) | IMPLEMENTED — TESTED on hardware |
+| Host → device PING; LCD host status; status re-announce on connect | IMPLEMENTED — TESTED on hardware |
+| systemd user service + installer (by-id device, sg fallback, hardening after re-login) | IMPLEMENTED — TESTED |
+| Stable device name | /dev/serial/by-id (udev default; no custom rule needed) |
+| Hot-plug reconnect (backoff cap 5 s) + stall watchdog (15 s) | IMPLEMENTED — TESTED (pty + 2 hardware replugs) |
+| esp32-switch.sh pauses the service | IMPLEMENTED |
+| Deauth/disassoc path on hardware | TESTED (phone leaving own network) |
+
+## Phase 6 — Validation
+
+- [ ] Long soak (hours): memory, gaps, link health, DB growth
+- [ ] False-positive review of detectors on a day of real traffic
+- [ ] Data retention / pruning policy for events and observations
+- [ ] Documentation review

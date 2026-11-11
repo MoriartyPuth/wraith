@@ -165,3 +165,15 @@ size_t ap_tracker_count(void)
 }
 
 uint32_t ap_tracker_evictions(void) { return s_evictions; }
+
+int ap_tracker_strongest(uint32_t now, uint32_t window_ms)
+{
+    int best = 0;
+    for (size_t i = 0; i < AP_TRACKER_MAX; i++) {
+        const ap_entry_t *e = &s_aps[i];
+        if (e->used && now - e->last_seen_ms <= window_ms && (best == 0 || e->rssi > best)) {
+            best = e->rssi;
+        }
+    }
+    return best;
+}

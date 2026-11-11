@@ -33,4 +33,22 @@ cd ../core && go run ./cmd/wraith -dashboard-dir ../dashboard/dist
 cd firmware && pio run && pio run -t upload && pio device monitor
 ```
 
-A systemd user unit is planned for Phase 5.
+## Run as a service (systemd user unit)
+
+```bash
+scripts/install-user-service.sh            # build, install, enable, start
+scripts/install-user-service.sh --uninstall
+journalctl --user -u wraith-core -f        # logs (JSON)
+```
+
+Installs `~/.local/bin/wraith`, the dashboard in
+`~/.local/share/wraith/dashboard`, data in `~/.local/share/wraith/wraith.db`,
+and `~/.config/systemd/user/wraith-core.service`. The serial device is the
+stable `/dev/serial/by-id/…` link (no udev rule needed). If your login session
+predates joining `dialout`, the unit starts Core via `sg dialout`; re-run the
+installer after your next login to switch to a direct start with
+`NoNewPrivileges=yes`. The service runs while you are logged in.
+
+`scripts/esp32-switch.sh` stops the service while it uses the port and
+restarts it afterwards; flash with `pio run -t upload` only after
+`systemctl --user stop wraith-core`.

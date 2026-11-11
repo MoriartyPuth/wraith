@@ -253,3 +253,40 @@ func TestOpenBurstIsGraceNotDegraded(t *testing.T) {
 		t.Fatal("degraded during startup grace")
 	}
 }
+
+func TestPingsHost(t *testing.T) {
+	master, slave := newPTY(t)
+	defer master.Close()
+	p := New(Options{Port: slave})
+	p.Start(context.Background())
+	defer p.Stop()
+	waitState(t, p, capture.StateRunning)
+	master.SetReadDeadline(time.Now().Add(3 * time.Second))
+	buf := make([]byte, 64)
+	n, err := master.Read(buf)
+	if err != nil || !strings.Contains(string(buf[:n]), "PING\n") {
+		t.Fatalf("no ping: %q %v", buf[:n], err)
+	}
+}
+
+func TestStalledReadReopens(t *testing.T) {
+	master, slave := newPTY(t)
+	defer master.Close()
+	p := New(Options{Port: slave, StallTimeout: 300 * time.Millisecond, MinRetry: 10 * time.Millisecond}).(*Provider)
+	p.Start(context.Background())
+	defer p.Stop()
+	waitState(t, p, capture.StateRunning)
+	// Say nothing: the provider must reopen, then still read normally.
+	deadline := time.Now().Add(3 * time.Second)
+	for p.Status().Stats["stall_reopens"] == 0 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if p.Status().Stats["stall_reopens"] == 0 || p.Status().Stats["reconnects"] == 0 {
+		t.Fatalf("no stall reopen: %v", p.Status().Stats)
+	}
+	waitState(t, p, capture.StateRunning)
+	master.Write([]byte(hbLine(0, 0) + "\n"))
+	if ev := waitEvent(t, p.Events()); ev.EventID != "aaaa0001-0" {
+		t.Fatalf("after reopen: %+v", ev)
+	}
+}

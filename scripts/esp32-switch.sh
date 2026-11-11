@@ -53,7 +53,26 @@ transfer() {
     return "$rc"
 }
 
+# The WRAITH Core user service holds the serial port; pause it while this
+# script talks to the board and resume it afterwards.
+service_paused=0
+pause_service() {
+    if systemctl --user is-active --quiet wraith-core.service 2>/dev/null; then
+        log "stopping wraith-core.service while using $port"
+        systemctl --user stop wraith-core.service
+        service_paused=1
+    fi
+}
+resume_service() {
+    if [ "$service_paused" = 1 ]; then
+        log "restarting wraith-core.service"
+        systemctl --user start wraith-core.service
+    fi
+}
+trap resume_service EXIT
+
 preflight() {
+    pause_service
     [ -x "$esptool" ] || die "esptool not found at $esptool (run 'pio run' once in firmware/)"
     [ -e "$port" ] || die "$port not present — is the board plugged in? (set ESPPORT)"
     if command -v fuser >/dev/null && fuser "$port" >/dev/null 2>&1; then

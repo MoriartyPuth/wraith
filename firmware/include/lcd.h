@@ -1,15 +1,25 @@
-/* 16x2 HD44780 LCD behind a PCF8574-class I2C backpack.
- * Status: NOT IMPLEMENTED (Phase 2) and DISABLED (WRAITH_LCD_ENABLED=0)
- * until backpack voltage / pull-ups are verified — see docs/hardware.md.
+/* 16x2 HD44780 LCD behind a PCF8574/PCF8574A I2C backpack.
  *
- * Design: a low-priority task owns the I2C bus (initialised once) and redraws
- * the active screen from a snapshot of counters every ~500 ms. Other modules
- * only update counters; they never block on the LCD. */
+ * A low-priority task owns the I2C bus (created once) and redraws the screen
+ * once a second, rotating through lcd_screens every few seconds, from a
+ * snapshot callback. Monitoring never waits on the LCD: if the display is
+ * absent or an I2C transfer fails, the LCD task backs off on its own.
+ *
+ * Electrical note: the display is already wired to GPIO21/22, so enabling
+ * the driver does not change the voltage on those pins. See docs/hardware.md. */
 #pragma once
 
 #include "esp_err.h"
+#include "lcd_screens.h"
 
-typedef enum { LCD_SCREEN_STATUS, LCD_SCREEN_WIFI, LCD_SCREEN_ALERTS, LCD_SCREEN_HOST } lcd_screen_t;
+typedef void (*lcd_snapshot_fn)(lcd_snapshot_t *out);
 
+/* Probe for the backpack and initialise the display. ESP_ERR_NOT_FOUND if no
+ * PCF8574 answered at the usual addresses. */
 esp_err_t lcd_init(void);
-void lcd_show(lcd_screen_t screen);
+
+/* Start the refresh task (call after lcd_init succeeded). */
+esp_err_t lcd_start(lcd_snapshot_fn snapshot);
+
+/* Detected I2C address (0 if none). */
+int lcd_address(void);

@@ -26,3 +26,7 @@ typedef struct {
 } wifi_monitor_stats_t;
 
 void wifi_monitor_get_stats(wifi_monitor_stats_t *out);
+
+/* Display snapshot, refreshed by the processing task once a second, safe to
+ * read from any task. */
+void wifi_monitor_display(uint32_t *aps, int *best_rssi);

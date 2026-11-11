@@ -64,20 +64,28 @@ If degraded warnings appear during normal running, try another USB port
 (directly on the PC, not a hub) or a shorter/better cable. The same adapter
 also fails esptool transfers at 460800 baud (115200 works).
 
-## LCD 16×2 with I2C backpack — UNKNOWN, DISABLED IN FIRMWARE
+## LCD 16×2 with I2C backpack — WORKING (2026-11-11)
 
-`WRAITH_LCD_ENABLED` is `0` until these are verified:
+| Item | Value |
+|------|-------|
+| Backpack | PCF8574 at I2C **0x27** (auto-detected: firmware probes 0x27, 0x3F, 0x20–0x26, 0x38–0x3E) |
+| Wiring | SDA → GPIO21, SCL → GPIO22 (as used by the board's previous Arduino project) |
+| Bus | 100 kHz; ESP32 internal pull-ups enabled in addition to the backpack's |
+| Screens (4 s each) | `WRAITH NANO / SENSOR ONLINE` · `AP:n CH:nn / BEST RSSI:-nn` · `DEAUTH:n / DISASSOC:n` · `HOST:CONNECTED / nano-xxxxxx` |
 
-- [ ] Backpack chip (PCF8574 / PCF8574A) and address (commonly `0x27` or `0x3F`)
-- [ ] Supply voltage. Most HD44780 modules need 5 V for adequate contrast.
-- [ ] **Pull-up voltage on SDA/SCL.** Backpacks typically have 4.7–10 kΩ
-      pull-ups to their own VCC. If VCC is 5 V, SDA/SCL idle at 5 V.
+The display keeps its last text while powered, which is why it still showed
+the previous project's text before WRAITH drove it.
 
-**ESP32 GPIOs are not 5 V tolerant.** If the backpack is powered from 5 V, do
-not connect SDA/SCL directly. Use a bidirectional I2C level shifter (e.g.
-BSS138-based), or remove the backpack's pull-ups and rely on 3.3 V pull-ups —
-only after confirming the PCF8574 recognizes 3.3 V as logic high at your supply
-voltage (V_IH ≈ 0.7 × VCC = 3.5 V at 5 V, so it often does **not**). Measure
-SDA/SCL to GND with the backpack powered and the ESP32 disconnected.
+Electrical note (still advisable to check once): ESP32 GPIOs are not 5 V
+tolerant. If the backpack is powered from 5 V its pull-ups may hold SDA/SCL
+at 5 V. The display was already wired this way before WRAITH, so enabling the
+driver did not change the pin voltage; measuring SDA/SCL to GND with a
+multimeter (expect ≤ 3.3 V) would settle it. If it reads ~5 V, add a
+bidirectional level shifter.
 
-Tentative wiring (after level shifting): SDA → GPIO21, SCL → GPIO22, GND → GND.
+### USB reconnect behaviour (tested 2026-11-11)
+
+After every replug the adapter emits a replay burst and, on the first open,
+the read path can stall (no data although the board is sending; a fresh open
+works). Core's serial provider reopens the port after 15 s without data
+(`stall_reopens`). Measured: sensor back online 16–19 s after replugging.

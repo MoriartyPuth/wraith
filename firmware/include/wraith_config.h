@@ -37,13 +37,12 @@
 #define WRAITH_TX_QUEUE_LEN 16
 
 /* --- LCD (16x2, HD44780 behind a PCF8574-class I2C backpack) ---
- * DISABLED by default: the backpack's supply and pull-up voltage are not yet
- * verified. ESP32 GPIOs are NOT 5 V tolerant; a backpack powered from 5 V
- * usually pulls SDA/SCL to 5 V. Enable only after confirming 3.3 V-compatible
- * wiring or fitting a bidirectional level shifter (docs/hardware.md). */
-#define WRAITH_LCD_ENABLED 0
+ * Enabled: the user's display is already wired (it previously ran another
+ * project on this board), so driving it does not change the voltage on the
+ * pins. The address is auto-detected. ESP32 GPIOs are NOT 5 V tolerant; see
+ * docs/hardware.md for the pull-up check that remains advisable. */
+#define WRAITH_LCD_ENABLED 1
 #define WRAITH_LCD_I2C_PORT 0
-#define WRAITH_LCD_SDA_GPIO 21 /* tentative */
-#define WRAITH_LCD_SCL_GPIO 22 /* tentative */
-#define WRAITH_LCD_I2C_ADDR 0x27 /* common default; 0x3F also common — verify */
+#define WRAITH_LCD_SDA_GPIO 21 /* Arduino-ESP32 Wire default */
+#define WRAITH_LCD_SCL_GPIO 22 /* Arduino-ESP32 Wire default */
 #define WRAITH_LCD_I2C_HZ 100000

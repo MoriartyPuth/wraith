@@ -54,7 +54,16 @@ never joins a network). Nano therefore sends `timestamp: 0` and includes
 `uptime_ms` in heartbeats. WRAITH Core records its own `received_at` for every
 event and uses that for ordering when `timestamp` is `0`.
 
-### Event IDs, duplicates and reconnects
+### Host → device
+
+The link is two-way but the sensor accepts no commands. Core writes the
+ASCII line `PING\n` every 2 s while it reads the port. Nano treats the host
+as connected while pings arrive (timeout 6 s; shown on the LCD) and, when a
+host (re)connects, sends a `sensor.status` within one heartbeat interval so
+a late-attaching Core learns state and capabilities immediately. All other
+input is ignored.
+
+## Event IDs, duplicates and reconnects
 
 Nano event IDs are `<boot_id>-<seq>`, where `boot_id` is 8 hex chars drawn from
 the hardware RNG at boot. Core:
@@ -128,6 +137,9 @@ count?                     integer ≥ 1  beacons aggregated in this report
 
 ### `wifi.deauth_observed` / `wifi.disassoc_observed`
 Aggregated over a window. Requires `bssid` (BSSID field of the frame).
+`channel` is the channel the radio was tuned to: these frames carry no
+channel field, and the ESP32 also receives adjacent channels, so it may
+differ by 1–2 from the AP's channel.
 ```
 count       integer ≥ 1
 window_ms   integer ≥ 1

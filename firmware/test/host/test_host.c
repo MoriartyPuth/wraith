@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "frame_parser.h"
+#include "lcd_screens.h"
 #include "json_writer.h"
 #include "wraith_protocol.h"
 
@@ -92,6 +93,34 @@ static void test_crc32(void)
     snprintf(want, sizeof want, "%08lx", (unsigned long)proto_crc32(buf, n - WRAITH_CRC_SUFFIX_LEN));
     CHECK(strncmp(buf + n - 9, want, 8) == 0);
     CHECK(memchr(buf, '\t', n - WRAITH_CRC_SUFFIX_LEN) == NULL); /* no raw tab inside JSON */
+}
+
+static void test_lcd_screens(void)
+{
+    char a[LCD_COLS + 1], b[LCD_COLS + 1];
+    lcd_snapshot_t s = {.wifi_ok = true, .aps = 12, .channel = 6, .best_rssi = -48, .deauth = 2,
+                        .disassoc = 1, .host_connected = true, .sensor_id = "nano-70b2a8"};
+    lcd_render(LCD_SCREEN_WIFI, &s, a, b);
+    CHECK(strcmp(a, "AP:12  CH:06    ") == 0);
+    CHECK(strcmp(b, "BEST RSSI:-48   ") == 0);
+    lcd_render(LCD_SCREEN_HOST, &s, a, b);
+    CHECK(strcmp(a, "HOST:CONNECTED  ") == 0 && strcmp(b, "nano-70b2a8     ") == 0);
+    lcd_render(LCD_SCREEN_MGMT, &s, a, b);
+    CHECK(strcmp(a, "DEAUTH:2        ") == 0 && strcmp(b, "DISASSOC:1      ") == 0);
+    /* Overflow and edge values stay within 16 printable columns. */
+    lcd_snapshot_t big = {.aps = 123456, .channel = 0, .best_rssi = 0, .deauth = 4000000000u,
+                          .disassoc = 4000000000u, .sensor_id = "an-extremely-long-sensor-id\x01"};
+    for (int sc = 0; sc < LCD_SCREEN_COUNT; sc++) {
+        lcd_render((lcd_screen_t)sc, &big, a, b);
+        CHECK(strlen(a) == LCD_COLS && strlen(b) == LCD_COLS);
+        for (int i = 0; i < LCD_COLS; i++) {
+            CHECK(a[i] >= 0x20 && a[i] < 0x7F && b[i] >= 0x20 && b[i] < 0x7F);
+        }
+    }
+    lcd_render(LCD_SCREEN_WIFI, &big, a, b);
+    CHECK(strncmp(b, "NO AP HEARD", 11) == 0);
+    lcd_render(LCD_SCREEN_STATUS, &big, a, b);
+    CHECK(strncmp(b, "WIFI ERROR", 10) == 0);
 }
 
 static void test_heartbeat(void)
@@ -181,6 +210,7 @@ int main(int argc, char **argv)
     test_overflow();
     test_heartbeat();
     test_crc32();
+    test_lcd_screens();
     test_frame_parser();
     run_wifi_tests();
     if (failures) {

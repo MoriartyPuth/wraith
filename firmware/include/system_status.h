@@ -10,6 +10,12 @@ const proto_identity_t *system_status_identity(void);
 /* Update state and emit a sensor.status event immediately. */
 void system_status_set_state(sensor_state_t state, const char *message);
 
+/* Ask for a sensor.status event soon (within one heartbeat interval), e.g.
+ * when a host starts listening, so it does not wait up to 60 s for the
+ * periodic one. Safe from any task: only sets a flag; the status task (which
+ * has the stack for serialization) emits it. */
+void system_status_request_announce(void);
+
 /* Update the status message without emitting (sent with the next periodic
  * sensor.status). Used for monitoring statistics. */
 void system_status_set_message(const char *message);

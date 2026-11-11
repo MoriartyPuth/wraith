@@ -11,6 +11,8 @@
  serializer (json + CRC-32)   persist (SQLite)
    │                          detection ─▶ findings
  transport task ── USB serial ──▶          REST /api/v1 ◀──────────── fetch / poll
+ host link (PING) ◀── every 2 s ──        (stall watchdog: reopen after 15 s silence)
+ LCD task (I2C 0x27, 4 screens)
    lines: <json>\t<crc32>\n            WS /api/v1/ws ─────────────▶ live updates
 ```
 

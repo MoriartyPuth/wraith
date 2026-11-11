@@ -36,6 +36,10 @@ const name = "esp32-serial"
 // mark the link degraded during this grace period.
 const startupGrace = 30 * time.Second
 
+// pingInterval: Core tells the sensor it is listening (shown on its LCD as
+// "HOST: CONNECTED"). The sensor's timeout is 6 s.
+const pingInterval = 2 * time.Second
+
 // Link-health thresholds: within one window, a link that delivers more than
 // junkMin junk lines (non-protocol or failed checksum) and junkRatio times as
 // many junk lines as valid events is reported as degraded.
@@ -52,7 +56,12 @@ type Options struct {
 	OnReject func(capture.Rejection)      // may be nil
 	OnStatus func(capture.ProviderStatus) // may be nil; called on state changes
 	MinRetry time.Duration                // default 1 s
-	MaxRetry time.Duration                // default 30 s
+	MaxRetry time.Duration                // default 5 s (local device: retrying is cheap)
+	// StallTimeout: if an open port delivers no bytes for this long, it is
+	// closed and reopened. Nano sends a heartbeat every 5 s, so silence means
+	// the read path is stuck (observed after adapter replay storms: reads on
+	// the open file never resume, while a fresh open works). Default 15 s.
+	StallTimeout time.Duration
 }
 
 // Provider implements capture.CaptureProvider for one serial port.
@@ -66,7 +75,7 @@ type Provider struct {
 	done   chan struct{}
 	file   *os.File
 
-	lines, valid, nonProtocol, oversize, rejected, partial, reconnects, crcFailed, replayed atomic.Uint64
+	lines, valid, nonProtocol, oversize, rejected, partial, reconnects, crcFailed, replayed, pings, stalls atomic.Uint64
 }
 
 // New returns the provider; an empty port yields an "unavailable" stub.
@@ -81,7 +90,10 @@ func New(opt Options) capture.CaptureProvider {
 		opt.MinRetry = time.Second
 	}
 	if opt.MaxRetry == 0 {
-		opt.MaxRetry = 30 * time.Second
+		opt.MaxRetry = 5 * time.Second
+	}
+	if opt.StallTimeout == 0 {
+		opt.StallTimeout = 15 * time.Second
 	}
 	p := &Provider{opt: opt, events: make(chan capture.WirelessEvent, 256)}
 	p.status = capture.ProviderStatus{Name: name, State: capture.StateStopped, Message: opt.Port, Since: time.Now(), Implemented: true}
@@ -100,7 +112,7 @@ func (p *Provider) Status() capture.ProviderStatus {
 		"lines": p.lines.Load(), "valid": p.valid.Load(), "rejected": p.rejected.Load(),
 		"non_protocol": p.nonProtocol.Load(), "oversize": p.oversize.Load(),
 		"partial_at_disconnect": p.partial.Load(), "reconnects": p.reconnects.Load(),
-		"checksum_failed": p.crcFailed.Load(), "replayed_on_open": p.replayed.Load(),
+		"checksum_failed": p.crcFailed.Load(), "replayed_on_open": p.replayed.Load(), "pings_sent": p.pings.Load(), "stall_reopens": p.stalls.Load(),
 	}
 	return st
 }
@@ -176,7 +188,10 @@ func (p *Provider) run(ctx context.Context) {
 		p.mu.Unlock()
 		p.setState(capture.StateRunning, "reading "+p.opt.Port)
 
+		connCtx, stopPing := context.WithCancel(ctx)
+		go p.ping(connCtx, f)
 		err = p.readLoop(ctx, f)
+		stopPing()
 
 		p.mu.Lock()
 		p.file = nil
@@ -188,6 +203,23 @@ func (p *Provider) run(ctx context.Context) {
 		p.setState(capture.StateError, fmt.Sprintf("%s disconnected: %v", p.opt.Port, err))
 	}
 	p.setState(capture.StateStopped, "stopped")
+}
+
+// ping writes "PING\n" every pingInterval until ctx ends. Write errors are
+// ignored here: a dead port is detected by the read loop.
+func (p *Provider) ping(ctx context.Context, f *os.File) {
+	t := time.NewTicker(pingInterval)
+	defer t.Stop()
+	for {
+		if _, err := f.Write([]byte("PING\n")); err == nil {
+			p.pings.Add(1)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }
 
 // health tracks junk vs valid lines per window and flips the provider
@@ -236,8 +268,14 @@ func (p *Provider) readLoop(ctx context.Context, f *os.File) error {
 	h := health{start: opened, opened: opened}
 	for {
 		p.checkHealth(&h, time.Now())
+		// Each read must make progress within StallTimeout (see Options).
+		_ = f.SetReadDeadline(time.Now().Add(p.opt.StallTimeout))
 		line, err := lr.Next()
 		if err != nil {
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				p.stalls.Add(1)
+				return fmt.Errorf("no data for %s; reopening (stalled read)", p.opt.StallTimeout)
+			}
 			if errors.Is(err, io.ErrUnexpectedEOF) {
 				p.partial.Add(1)
 			}

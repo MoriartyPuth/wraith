@@ -32,5 +32,6 @@ fi
   "$root/firmware/src/beacon_parser.c" \
   "$root/firmware/src/ap_tracker.c" \
   "$root/firmware/src/management_monitor.c" \
+  "$root/firmware/src/lcd_screens.c" \
   -o "$out/test_host"
 "$out/test_host" "$@"

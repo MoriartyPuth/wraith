@@ -26,4 +26,6 @@ void ap_tracker_observe(const uint8_t bssid[6], const beacon_info_t *bi, int rss
                         uint32_t now_ms);
 void ap_tracker_tick(uint32_t now_ms);
 size_t ap_tracker_count(void);
+/* Strongest RSSI among APs heard within window_ms, or 0 if none. */
+int ap_tracker_strongest(uint32_t now_ms, uint32_t window_ms);
 uint32_t ap_tracker_evictions(void);

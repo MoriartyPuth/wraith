@@ -38,6 +38,8 @@ static uint8_t s_channels[] = WRAITH_CHANNELS;
 static bool s_channel_ok[sizeof s_channels];
 static volatile int s_current_channel;
 static uint32_t s_rx, s_drop, s_bad;
+static uint32_t s_disp_aps;
+static int s_disp_best;
 
 static inline uint32_t now_ms(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
 
@@ -137,6 +139,7 @@ static void proc_task(void *arg)
     uint32_t next_hop = now_ms() + WRAITH_DWELL_MS;
     uint32_t next_tick = now_ms() + 100;
     uint32_t next_stats = now_ms() + 5000;
+    uint32_t next_disp = now_ms() + 1000;
     for (;;) {
         uint32_t now = now_ms();
         int32_t wait = (int32_t)(next_tick - now);
@@ -161,6 +164,11 @@ static void proc_task(void *arg)
             ap_tracker_tick(now);
             mgmt_monitor_tick(now);
             next_tick = now + 100;
+        }
+        if ((int32_t)(now - next_disp) >= 0) {
+            __atomic_store_n(&s_disp_aps, (uint32_t)ap_tracker_count(), __ATOMIC_RELAXED);
+            __atomic_store_n(&s_disp_best, ap_tracker_strongest(now, 60000), __ATOMIC_RELAXED);
+            next_disp = now + 1000;
         }
         if ((int32_t)(now - next_stats) >= 0) {
             update_stats_message();
@@ -217,4 +225,10 @@ void wifi_monitor_get_stats(wifi_monitor_stats_t *out)
     out->frames_drop = __atomic_load_n(&s_drop, __ATOMIC_RELAXED);
     out->frames_bad = s_bad;
     out->aps = (uint32_t)ap_tracker_count();
+}
+
+void wifi_monitor_display(uint32_t *aps, int *best_rssi)
+{
+    *aps = __atomic_load_n(&s_disp_aps, __ATOMIC_RELAXED);
+    *best_rssi = __atomic_load_n(&s_disp_best, __ATOMIC_RELAXED);
 }
