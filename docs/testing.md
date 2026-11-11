@@ -86,6 +86,16 @@ under `-race`.
   (kernel `urb status -71`) until physically replugged; not recoverable in
   software.
 
+## Accelerated load test
+
+Feeding 40 000 beacon events (~7 h of real capture) straight through the
+pipeline into an on-disk DB (`WRAITH_LOAD=40000`, env-gated, not in check-all):
+ingest ~7 000 events/s, heap delta 0.3 MB (no per-event leak), DB ~31 MB.
+
+This surfaced an O(n^2) prune: `observations.event_row` had no index, so the
+cascade delete scanned the table per event — 1m13s to prune 20 k events.
+Adding `idx_obs_event_row` (migration 0003) cut it to 170 ms (~430x).
+
 ## Soak (started 2026-11-11, ongoing)
 
 ~2 h sample (live service, `~/.local/share/wraith/soak.log`): link stable,
