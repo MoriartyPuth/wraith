@@ -28,6 +28,11 @@ type Publisher interface {
 	Publish(kind string, data any)
 }
 
+// FindingDedupWindow is how long a stored finding suppresses an equivalent
+// new one (same category + BSSID). It spans typical restart gaps so the same
+// ongoing condition is recorded once, not once per Core run.
+const FindingDedupWindow = 6 * time.Hour
+
 // Pipeline is the ingestion pipeline.
 type Pipeline struct {
 	store *storage.Store
@@ -38,7 +43,7 @@ type Pipeline struct {
 	now   func() time.Time
 	start time.Time
 
-	Ingested, Duplicates, Gaps, Restarts, Failures atomic.Uint64
+	Ingested, Duplicates, Gaps, Restarts, Failures, Deduped atomic.Uint64
 }
 
 // New creates a pipeline. pub may be nil.
@@ -170,12 +175,30 @@ func (p *Pipeline) Handle(ctx context.Context, ev *events.Event) error {
 				ap = prev
 			}
 		}
-		findings = p.det.Observe(&detection.Context{Event: ev, PrevAP: prev, CurAP: ap, Lookup: lookup{ctx, tx},
+		raw := p.det.Observe(&detection.Context{Event: ev, PrevAP: prev, CurAP: ap, Lookup: lookup{ctx, tx},
 			Now: ev.ReceivedAt, CoreUptime: p.now().Sub(p.start)})
-		for _, f := range findings {
+		// Suppress findings equivalent to one already stored recently, so a
+		// Core restart (which clears detectors' in-memory dedup) does not
+		// create duplicates for the same ongoing condition.
+		dedupSince := ev.ReceivedAt.Add(-FindingDedupWindow).UnixMilli()
+		findings = findings[:0]
+		for _, f := range raw {
+			bssid := ""
+			if f.BSSID != nil {
+				bssid = *f.BSSID
+			}
+			exists, err := tx.FindingExistsSince(ctx, f.Category, bssid, dedupSince)
+			if err != nil {
+				return err
+			}
+			if exists {
+				p.Deduped.Add(1)
+				continue
+			}
 			if err := tx.InsertFinding(ctx, f); err != nil {
 				return err
 			}
+			findings = append(findings, f)
 		}
 		return nil
 	})

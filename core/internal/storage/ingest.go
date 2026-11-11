@@ -207,3 +207,24 @@ func (t *Tx) InsertFinding(ctx context.Context, f Finding) error {
 		f.Explanation, f.Limitations, string(ev), f.CreatedAt, f.CreatedAt)
 	return err
 }
+
+// FindingExistsSince reports whether an open or recent finding with the same
+// category and BSSID was created at or after `since` (Unix ms). The pipeline
+// uses this to suppress duplicate findings across Core restarts, where the
+// detectors' in-memory dedup state has been lost.
+func (s *Store) FindingExistsSince(ctx context.Context, category, bssid string, since int64) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM findings WHERE category = ? AND IFNULL(bssid,'') = ? AND created_at >= ?`,
+		category, bssid, since).Scan(&n)
+	return n > 0, err
+}
+
+// findingExistsSince is the transaction-scoped form used during ingestion.
+func (t *Tx) FindingExistsSince(ctx context.Context, category, bssid string, since int64) (bool, error) {
+	var n int
+	err := t.tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM findings WHERE category = ? AND IFNULL(bssid,'') = ? AND created_at >= ?`,
+		category, bssid, since).Scan(&n)
+	return n > 0, err
+}

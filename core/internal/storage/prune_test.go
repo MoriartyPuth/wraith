@@ -6,12 +6,14 @@ import (
 	"time"
 )
 
+// base is a fixed reference so tests don't race the wall clock at bucket edges.
+var base = time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC)
+
 func seedEvents(t *testing.T, s *Store, ageDays []int) {
 	t.Helper()
 	ctx := context.Background()
-	now := time.Now()
 	for i, d := range ageDays {
-		at := now.AddDate(0, 0, -d).UnixMilli()
+		at := base.AddDate(0, 0, -d).UnixMilli()
 		err := s.WithTx(ctx, func(tx *Tx) error {
 			row, _, err := tx.InsertEvent(ctx, StoredEvent{
 				EventID: id(i), SensorID: "nano-1", Source: "wraith-nano", EventType: "wifi.beacon_observed",
@@ -52,7 +54,7 @@ func TestPruneByAge(t *testing.T) {
 	defer s.Close()
 	// 10 events: ages 0,1,2,...,9 days. Retain 5 days → ages 6..9 pruned (4).
 	seedEvents(t, s, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
-	cutoff := time.Now().AddDate(0, 0, -5).UnixMilli()
+	cutoff := base.Add(-time.Duration(5.5*24) * time.Hour).UnixMilli() // between the 5- and 6-day buckets
 
 	n, _ := s.CountOlderThan(ctx, cutoff)
 	if n != 4 {
@@ -82,13 +84,13 @@ func TestPruneKeepsFindings(t *testing.T) {
 	ctx := context.Background()
 	s, _ := Open(ctx, ":memory:")
 	defer s.Close()
-	old := time.Now().AddDate(0, 0, -30).UnixMilli()
+	old := base.AddDate(0, 0, -30).UnixMilli()
 	s.WithTx(ctx, func(tx *Tx) error {
 		return tx.InsertFinding(ctx, Finding{ID: "f-1", Category: "deauth_activity", Severity: "medium",
 			Confidence: 0.5, Classification: "suspicious", Explanation: "e", Evidence: []string{"e-x"}, CreatedAt: old})
 	})
 	seedEvents(t, s, []int{30})
-	if _, err := s.PruneEvents(ctx, time.Now().UnixMilli()); err != nil {
+	if _, err := s.PruneEvents(ctx, base.AddDate(0, 0, -1).UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
 	_, total, _ := s.ListFindings(ctx, Page{Limit: 10})
@@ -103,7 +105,7 @@ func TestPrunerLoopInitialSweep(t *testing.T) {
 	defer s.Close()
 	seedEvents(t, s, []int{0, 10})
 	done := make(chan PruneResult, 1)
-	go s.RunPruner(ctx, 5*24*time.Hour, time.Hour, time.Now, func(r PruneResult) {
+	go s.RunPruner(ctx, 5*24*time.Hour, time.Hour, func() time.Time { return base }, func(r PruneResult) {
 		select {
 		case done <- r:
 		default:

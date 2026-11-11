@@ -120,6 +120,7 @@ func run(args []string) error {
 				"seq_gaps": pipe.Gaps.Load(), "sensor_restarts": pipe.Restarts.Load(),
 				"ingest_failures": pipe.Failures.Load(), "stream_clients": uint64(hub.Clients()),
 				"pruned_events": prunedEvents.Load(), "pruned_observations": prunedObs.Load(),
+				"findings_deduped": pipe.Deduped.Load(),
 			}
 		},
 	})

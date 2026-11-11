@@ -42,6 +42,8 @@ startup false positives (a legitimate multi-BSSID network flagged before all
 its siblings were seen). Comprehensive false-positive tuning is deferred to
 the Phase 6 soak review, where real-traffic data drives threshold choices.
 
+Findings are also de-duplicated at the database level: a new finding with the same category and BSSID as one stored within the last 6 h is suppressed (the `findings_deduped` runtime stat). This keeps one record of an ongoing condition across Core restarts, which reset the detectors' in-memory state.
+
 Detector state (windows, cooldowns, warm-up) is in memory and resets when Core
 restarts. All thresholds are constants in the code; they are starting points
 and need tuning against real environments (Phase 6 false-positive evaluation).

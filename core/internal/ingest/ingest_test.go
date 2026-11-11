@@ -207,3 +207,36 @@ func TestRogueIndicatorThroughPipeline(t *testing.T) {
 		t.Fatalf("rogue: %+v", fs)
 	}
 }
+
+func TestFindingDedupAcrossRestart(t *testing.T) {
+	p, st, _ := setup(t)
+	p.start = time.Now().Add(-10 * time.Minute)
+	ap := func(seq int, bssid, auth string) *events.Event {
+		return line(t, "aaaa0001", seq, "wifi.ap_observed", `,"channel":6,"bssid":"`+bssid+`"`,
+			`{"ssid":"Home","ssid_hex":"486f6d65","rssi":-50,"auth_mode":"`+auth+`","hidden":false}`)
+	}
+	// First run: strong pair then an open twin -> one rogue finding.
+	feed(t, p, ap(0, "AA:00:00:00:00:01", "wpa2-psk"), ap(1, "02:00:00:00:00:99", "open"))
+	_, n, _ := st.ListFindings(context.Background(), storage.Page{Limit: 10})
+	if n != 1 {
+		t.Fatalf("first run findings = %d, want 1", n)
+	}
+	// Simulate a Core restart: fresh pipeline (empty detector + dedup state),
+	// same store, re-observe the same APs.
+	// New boot_id + higher seq => genuinely new events (a real restarted
+	// sensor keeps counting); only the finding would be a duplicate.
+	ap2 := func(seq int, bssid, auth string) *events.Event {
+		return line(t, "bbbb0002", seq, "wifi.ap_observed", `,"channel":6,"bssid":"`+bssid+`"`,
+			`{"ssid":"Home","ssid_hex":"486f6d65","rssi":-50,"auth_mode":"`+auth+`","hidden":false}`)
+	}
+	p2 := New(st, detection.NewEngine(), nil, p.log)
+	p2.start = time.Now().Add(-10 * time.Minute)
+	feed(t, p2, ap2(0, "AA:00:00:00:00:01", "wpa2-psk"), ap2(1, "02:00:00:00:00:99", "open"))
+	_, n, _ = st.ListFindings(context.Background(), storage.Page{Limit: 10})
+	if n != 1 {
+		t.Fatalf("after restart findings = %d, want 1 (duplicate not suppressed)", n)
+	}
+	if p2.Deduped.Load() == 0 {
+		t.Fatal("dedup counter not incremented")
+	}
+}
