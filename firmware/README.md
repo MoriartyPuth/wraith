@@ -22,7 +22,7 @@ pio device monitor      # serial (115200)
   `tx` env (`-D WRAITH_TX_ENABLED=1`) adds `TX_DEAUTH`/`TX_DISASSOC`/`TX_STATUS`
   command parsing and the `deauth-tx` capability; without it, unknown serial
   input is ignored as before. Limits: ≤ 10 frames, ≥ 100 ms spacing, 30 s
-  cooldown, unicast client only (see docs/tx.md). The `tx` env also uses
+  cooldown (0 in the `tx` env), unicast client only (see docs/tx.md). The `tx` env also uses
   unconfigured STA mode and links `tx_raw_override.c`
   (`-Wl,--allow-multiple-definition`) so `esp_wifi_80211_tx` accepts deauth
   frames; hardware-validated 2026-11-12.

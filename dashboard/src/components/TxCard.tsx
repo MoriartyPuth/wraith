@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../services/api";
 import { useApi } from "../hooks/useApi";
@@ -47,26 +47,82 @@ function TxForm({ bssid, lastChannel, clients }: { bssid: string; lastChannel: n
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<TxAccepted | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [repeating, setRepeating] = useState(false);
+  const [everyS, setEveryS] = useState("35");
+  const repeatRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clientOk = reMAC.test(client) && client.toUpperCase() !== bssid && client.toUpperCase() !== "FF:FF:FF:FF:FF:FF";
   const countNum = Number(count);
   const intervalNum = Number(interval);
   const valid = clientOk && countNum >= 1 && countNum <= 10 && intervalNum >= 100 && intervalNum <= 10000;
+  const everyNum = Number(everyS);
+  const repeatOk = Number.isFinite(everyNum) && everyNum > 0;
 
-  const submit = async () => {
+  useEffect(() => () => {
+    repeatRef.current = false;
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
+
+  const sendOnce = async (): Promise<boolean> => {
     setSending(true);
     setError(null);
-    setResult(null);
+    setNotice(null);
     try {
       const r = await api.sendTx({
         kind, bssid, client: client.toUpperCase(),
         count: countNum, interval_ms: intervalNum, confirm: true,
       });
       setResult(r.data);
+      return true;
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e));
+      return false;
     } finally {
       setSending(false);
+    }
+  };
+
+  const stopRepeat = () => {
+    repeatRef.current = false;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setRepeating(false);
+  };
+
+  const toggleRepeat = () => {
+    if (repeating) {
+      stopRepeat();
+      return;
+    }
+    if (!valid || !confirm || !repeatOk) return;
+    repeatRef.current = true;
+    setRepeating(true);
+    setNotice(null);
+    const loop = async () => {
+      if (!repeatRef.current) return;
+      const ok = await sendOnce();
+      if (!ok || !repeatRef.current) {
+        stopRepeat();
+        return;
+      }
+      timerRef.current = setTimeout(loop, Math.round(Number(everyS) * 1000));
+    };
+    void loop();
+  };
+
+  const stopAll = async () => {
+    stopRepeat();
+    setError(null);
+    setNotice(null);
+    try {
+      await api.stopTx();
+      setNotice("Stop sent — any running burst was aborted.");
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e));
     }
   };
 
@@ -112,15 +168,35 @@ function TxForm({ bssid, lastChannel, clients }: { bssid: string; lastChannel: n
           <span className="mb-1 block text-xs text-ink-3">Spacing (ms, ≥100)</span>
           <Input type="number" min={100} max={10000} step={100} value={interval} onChange={(e) => setInterval(e.target.value)} className="w-24" />
         </label>
+        <label className="block">
+          <span className="mb-1 block text-xs text-ink-3">Repeat every (s)</span>
+          <Input type="number" min={1} max={3600} value={everyS}
+            onChange={(e) => setEveryS(e.target.value)} className="w-24" disabled={repeating} />
+        </label>
         <label className="flex items-center gap-2 text-sm text-ink-2">
           <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} />
           I am authorized to test this network
         </label>
-        <Button variant="primary" disabled={!valid || !confirm || sending} onClick={submit}>
-          {sending ? "Sending…" : "Send test burst"}
+        <Button variant="primary" disabled={!valid || !confirm || sending || repeating} onClick={() => void sendOnce()}>
+          {sending && !repeating ? "Sending…" : "Send test burst"}
+        </Button>
+        <Button variant={repeating ? "default" : "primary"}
+          disabled={!repeating && (!valid || !confirm || !repeatOk)}
+          onClick={toggleRepeat}>
+          {repeating ? "Stop repeating" : "Repeat bursts"}
+        </Button>
+        <Button onClick={() => void stopAll()} title="Stop repeating and abort a burst already running on the sensor">
+          Stop
         </Button>
       </div>
+      {repeating && (
+        <p className="text-xs text-accent">
+          Repeating every {everyS} s until stopped — leave this page open. A request sent while the previous burst
+          is still running is rejected by the sensor; keep the interval above the burst length.
+        </p>
+      )}
       {error && <p className="text-sm text-bad">{error}</p>}
+      {notice && <p className="text-sm text-good">{notice}</p>}
       {result && (
         <div className="rounded border border-good/30 bg-good/5 px-3 py-2 text-sm text-ink-2">
           <p>
@@ -136,8 +212,9 @@ function TxForm({ bssid, lastChannel, clients }: { bssid: string; lastChannel: n
         </div>
       )}
       <p className="text-xs text-ink-3">
-        Limits mirror the sensor build: at most 10 frames per burst, ≥100 ms spacing, 30 s cooldown between bursts,
-        no broadcast clients, and bursts abort if the host link drops. The sensor logs every burst as an event.
+        Limits mirror the sensor build: at most 10 frames per burst, ≥100 ms spacing, a cooldown between bursts
+        (30 s by default; 0 in the test build), no broadcast clients, and bursts abort if the host link drops.
+        The sensor logs every burst as an event.
       </p>
     </div>
   );

@@ -75,6 +75,7 @@ All other input is ignored **unless** the firmware was built with
 TX_DEAUTH   <bssid> <client> <count> <interval_ms> <reason> <channel>
 TX_DISASSOC <bssid> <client> <count> <interval_ms> <reason> <channel>
 TX_STATUS
+TX_STOP
 ```
 
 Lines are ≤ 96 chars, no tabs/newlines; invalid or out-of-limit commands are

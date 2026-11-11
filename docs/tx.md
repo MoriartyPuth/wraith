@@ -65,7 +65,7 @@ raw TX back into promiscuous RX); confirmed on the first hardware burst.
 |-------|-------|
 | Frames per burst | ≤ 10 (default 1) |
 | Frame spacing | ≥ 100 ms, ≤ 10000 ms |
-| Cooldown between bursts | 30 s |
+| Cooldown between bursts | 30 s by default; **0 in the `tx` PlatformIO env** (continuous testing). Override with `-D WRAITH_TX_COOLDOWN_MS=…` (a burst already running is still rejected). |
 | Broadcast client | never allowed |
 | Burst aborted when | host link lost, radio error, or burst complete |
 
@@ -97,7 +97,13 @@ CSRF guard: cross-site forms cannot set it). Body:
 }
 ```
 
-Responses: `202` accepted (echo of parameters + channel), `400` validation
+Stop a burst in progress: `POST /api/v1/tx/stop` (same gates: `-tx`, JSON
+content type, connected sensor). It sends `TX_STOP`; the sensor aborts after
+the current frame and emits a `tx.ack` (`command: "status"`) with
+`detail` such as `burst aborted by operator; sent 3 of 10`. Harmless when no
+burst is running (`no burst running`).
+
+Responses for `/tx`: `202` accepted (echo of parameters + channel), `400` validation
 (including missing `confirm`), `403 tx_disabled` (Core started without
 `-tx`), `409 target_not_observed` / `target_channel_unknown` /
 `sensor_not_connected`, `502 tx_send_failed` (link write failed). The sensor's
@@ -113,6 +119,7 @@ not one of these, and only when compiled with `WRAITH_TX_ENABLED=1`):
 TX_DEAUTH   <bssid> <client> <count> <interval_ms> <reason> <channel>
 TX_DISASSOC <bssid> <client> <count> <interval_ms> <reason> <channel>
 TX_STATUS
+TX_STOP        abort a running burst (acks how many frames were sent)
 ```
 
 Example: `TX_DEAUTH AA:BB:CC:DD:EE:01 11:22:33:44:55:66 1 500 7 6`.
@@ -150,6 +157,14 @@ Check readiness: `/api/v1/system/info` → `"tx_enabled": true`, and the sensor
 status on `/api/v1/sensors` shows the `deauth-tx` capability. The dashboard
 shows a "Deauth test transmission" card on an access point's page only when
 Core has TX enabled *and* a sensor is connected.
+
+The card can also **repeat a burst automatically** ("Repeat bursts"): it
+re-sends at whatever interval you set. Repeating is client-side — it stops
+when you press "Stop repeating" or leave the page. The sensor's per-burst
+limits still apply: a request is rejected while a previous burst is still
+running, and if the firmware keeps a cooldown (the `tx` env sets it to 0) a
+too-fast repeat yields a rejected `tx.ack`. Each burst is still capped and
+spaced.
 
 ## Observing the result
 

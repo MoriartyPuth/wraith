@@ -116,6 +116,7 @@ func (h *handlers) routes(r chi.Router) {
 		r.Get("/capture/interfaces", h.captureInterfaces)
 		r.Get("/statistics", h.statistics)
 		r.Post("/tx", h.txSend)
+		r.Post("/tx/stop", h.txStop)
 	}
 }
 
@@ -511,6 +512,33 @@ func (h *handlers) txSend(w http.ResponseWriter, r *http.Request) {
 			"note":    "the sensor acknowledges via tx.ack and reports the burst via tx.report (see /events?type=tx.ack,tx.report)",
 		},
 	})
+}
+
+// txStop aborts a burst already running on the sensor (and is harmless when
+// none is). Used by the dashboard Stop button so a long burst does not have
+// to finish. Same gates as txSend.
+func (h *handlers) txStop(w http.ResponseWriter, r *http.Request) {
+	if !h.d.TXEnabled {
+		writeErr(w, http.StatusForbidden, "tx_disabled",
+			"deauth test transmission is disabled; start Core with -tx (docs/tx.md)")
+		return
+	}
+	if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		writeErr(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "Content-Type must be application/json")
+		return
+	}
+	if h.captureNotRunning() {
+		writeErr(w, http.StatusConflict, "sensor_not_connected",
+			"no capture provider is connected; the sensor must be online")
+		return
+	}
+	if err := h.d.Capture.SendCommand("TX_STOP"); err != nil {
+		h.d.Log.Warn("tx stop command failed", "err", err)
+		writeErr(w, http.StatusBadGateway, "tx_send_failed", "the stop command could not be delivered to the sensor")
+		return
+	}
+	h.d.Log.Info("deauth test stop requested")
+	writeJSON(w, http.StatusAccepted, map[string]any{"data": map[string]any{"stopped": true}})
 }
 
 func (h *handlers) captureNotRunning() bool {

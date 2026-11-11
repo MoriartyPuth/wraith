@@ -65,6 +65,7 @@ void tx_init(const event_sink_t *sink, const tx_radio_ops_t *ops);
 
 /* Parse one host-link command line:
  *   TX_STATUS
+ *   TX_STOP
  *   TX_DEAUTH <bssid> <client> <count> <interval_ms> <reason> <channel>
  *   TX_DISASSOC <bssid> <client> <count> <interval_ms> <reason> <channel>
  * Returns false when the line is not a TX command at all. On a TX command,
@@ -84,6 +85,11 @@ bool tx_command(const char *line, uint32_t now);
  * burst is running (the channel is pinned while true). host_connected is the
  * host-link state; losing it aborts the burst. */
 bool tx_tick(uint32_t now, bool host_connected);
+
+/* Abort an active burst (operator stop). Emits a tx.ack with command
+ * "status" and a detail carrying how many frames were sent. Harmless when
+ * idle (acks "no burst running"). */
+bool tx_abort(uint32_t now);
 
 /* Emit a tx.ack describing the current state (command "status"). */
 void tx_report_status(uint32_t now);

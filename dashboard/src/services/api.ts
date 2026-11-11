@@ -128,6 +128,14 @@ export const api = {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
   },
+  stopTx: () => {
+    if (isDemo()) {
+      return Promise.reject(new ApiError(503, "tx_disabled", "deauth test transmission is not available in demo mode"));
+    }
+    return request<{ data: { stopped: boolean } }>("/tx/stop", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+  },
 };
 
 /** Fetch all pages of an event query (for export), up to `max` rows. */

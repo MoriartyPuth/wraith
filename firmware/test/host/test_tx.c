@@ -221,6 +221,31 @@ static void test_burst_lifecycle(void)
     CHECK(g_env.frames[3][22] == 0x40); /* fourth frame: sequence number 4 */
 }
 
+static void test_stop_mid_burst(void)
+{
+    env_init();
+    g_send_result = 0;
+    g_set_channel_result = 0;
+    submit_ok(TX_KIND_DEAUTH, 5, 500, 6);
+    tx_tick(1000, true); /* first frame out */
+    CHECK(g_env.n_frames == 1);
+    CHECK(tx_state() == TX_ACTIVE);
+
+    CHECK(tx_command("TX_STOP", 1100));
+    CHECK(tx_state() == TX_IDLE);
+    CHECK(strstr(g_env.lines[g_env.n - 1], "\"status\":\"accepted\"") != NULL);
+    CHECK(strstr(g_env.lines[g_env.n - 1], "aborted by operator") != NULL);
+    CHECK(strstr(g_env.lines[g_env.n - 1], "sent 1 of 5") != NULL);
+
+    /* The rest of the burst must not go out. */
+    CHECK(!tx_tick(1500, true));
+    CHECK(g_env.n_frames == 1);
+
+    /* Stopping while idle is acknowledged, not an error. */
+    CHECK(tx_command("TX_STOP", 1600));
+    CHECK(strstr(g_env.lines[g_env.n - 1], "no burst running") != NULL);
+}
+
 static void test_abort_on_host_lost(void)
 {
     env_init();
@@ -303,6 +328,7 @@ void run_tx_tests(void)
     test_frame_builder();
     test_command_parsing();
     test_burst_lifecycle();
+    test_stop_mid_burst();
     test_abort_on_host_lost();
     test_abort_on_radio_error();
     test_disabled_build();

@@ -51,8 +51,12 @@
 #define WRAITH_TX_MAX_FRAMES 10
 /* Hard floor for the spacing between frames of a burst. */
 #define WRAITH_TX_MIN_INTERVAL_MS 100
-/* Mandatory rest after a burst before the next one is accepted. */
+/* Mandatory rest after a burst before the next one is accepted. Overridable
+ * at build time; the `tx` PlatformIO env sets 0 for continuous testing. Even
+ * with 0, a new request is still rejected while a burst is actually running. */
+#ifndef WRAITH_TX_COOLDOWN_MS
 #define WRAITH_TX_COOLDOWN_MS 30000
+#endif
 /* 0: only unicast clients may be targeted. 1: also allow the broadcast
  * address (every associated STA of the BSSID). Leave 0 unless you accept
  * disconnecting everything on your own AP at once. */

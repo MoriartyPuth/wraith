@@ -262,7 +262,14 @@ bool tx_parse_command(const char *line, bool *ok, tx_request_t *req, char *err, 
     if (!token(&p, &t, &n)) {
         return false;
     }
-    if (n == 9 && memcmp(t, "TX_STATUS", 9) == 0) {
+    if (n == 7 && memcmp(t, "TX_STOP", 7) == 0) {
+        p = skip_ws(p);
+        if (*p != '\0') {
+            snprintf(errbuf, sizeof errbuf, "unexpected argument");
+        } else {
+            *ok = true;
+        }
+    } else if (n == 9 && memcmp(t, "TX_STATUS", 9) == 0) {
         p = skip_ws(p);
         if (*p != '\0') {
             snprintf(errbuf, sizeof errbuf, "unexpected argument");
@@ -294,6 +301,9 @@ static const char *line_command(const char *line)
     if (strncmp(line, "TX_STATUS", 9) == 0) {
         return "status";
     }
+    if (strncmp(line, "TX_STOP", 7) == 0) {
+        return "stop";
+    }
     return "deauth";
 }
 
@@ -316,6 +326,10 @@ bool tx_command(const char *line, uint32_t now)
     }
     if (strcmp(line_command(line), "status") == 0) {
         tx_report_status(now);
+        return true;
+    }
+    if (strcmp(line_command(line), "stop") == 0) {
+        tx_abort(now);
         return true;
     }
     tx_submit(&req, now); /* a rejection is acked inside tx_submit */
@@ -355,6 +369,22 @@ bool tx_submit(const tx_request_t *req, uint32_t now)
     s_next_frame_ms = now; /* first frame goes out on the next tick */
     set_state(TX_ACTIVE);
     emit_ack(seq, tx_kind_name(req->kind), "accepted", NULL, req->bssid, req->client);
+    return true;
+}
+
+bool tx_abort(uint32_t now)
+{
+    (void)now;
+    uint32_t seq = emit_seq();
+    if (s_state != TX_ACTIVE) {
+        emit_ack(seq, "status", "accepted", "no burst running", NULL, NULL);
+        return false;
+    }
+    char detail[96];
+    snprintf(detail, sizeof detail, "burst aborted by operator; sent %u of %u", (unsigned)s_sent,
+             (unsigned)s_req.count);
+    emit_ack(seq, "status", "accepted", detail, s_req.bssid, s_req.client);
+    set_state(TX_IDLE);
     return true;
 }
 

@@ -233,3 +233,50 @@ func TestTXSendFailure(t *testing.T) {
 		t.Fatalf("%d %v", code, body)
 	}
 }
+
+func TestTXStop(t *testing.T) {
+	postTx := func(srv *httptest.Server, ct, body string) (int, map[string]any) {
+		req, _ := http.NewRequest("POST", srv.URL+"/api/v1/tx/stop", strings.NewReader(body))
+		if ct != "" {
+			req.Header.Set("Content-Type", ct)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var out map[string]any
+		_ = json.NewDecoder(resp.Body).Decode(&out)
+		return resp.StatusCode, out
+	}
+
+	// Disabled gate.
+	srv, _ := newTxServer(t, false, nil)
+	if code, body := postTx(srv, "application/json", "{}"); code != http.StatusForbidden ||
+		errCode(t, body) != "tx_disabled" {
+		t.Fatalf("disabled: %d %v", code, body)
+	}
+
+	// Content-type gate.
+	p := newFakeCommander()
+	srv, _ = newTxServer(t, true, p)
+	if code, _ := postTx(srv, "text/plain", "{}"); code != http.StatusUnsupportedMediaType {
+		t.Fatalf("content type: %d", code)
+	}
+
+	// No running sensor.
+	if code, body := postTx(srv, "application/json", "{}"); code != http.StatusConflict ||
+		errCode(t, body) != "sensor_not_connected" {
+		t.Fatalf("no sensor: %d %v", code, body)
+	}
+
+	// Accepted: the sensor receives TX_STOP.
+	p.setRunning()
+	code, body := postTx(srv, "application/json", "{}")
+	if code != http.StatusAccepted || body["data"].(map[string]any)["stopped"] != true {
+		t.Fatalf("accepted: %d %v", code, body)
+	}
+	if got := p.sentLine(); got != "TX_STOP" {
+		t.Fatalf("command %q, want TX_STOP", got)
+	}
+}
