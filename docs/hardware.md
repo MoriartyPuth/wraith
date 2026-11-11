@@ -1,0 +1,83 @@
+# Hardware
+
+Status of every item: what was **observed** on this machine vs. **unknown**.
+
+## Host (observed 2026-11-11)
+
+| Item | Value |
+|------|-------|
+| OS | Fedora 44, kernel 7.2.11-200.fc44.x86_64 |
+| Wi-Fi | MediaTek MT7922 802.11ax (`14c3:7922`), ASUS PCE-AXE59BT subsystem |
+| Driver | `mt7921e` |
+| Interface | `wlo1`, managed, currently associated (5 GHz ch 36, 80 MHz) |
+| Monitor mode | **Supported** (`iw list` → supported interface modes) |
+| Monitor + managed concurrently | **No** — no valid interface combination includes `monitor` |
+
+**Consequence:** monitoring with the MT7922 requires taking `wlo1` out of
+managed mode, which disconnects Wi-Fi. WRAITH will not do this itself. Options:
+use wired Ethernet (`enp3s0`, currently unplugged) while monitoring, or add a
+second USB adapter with a monitor-capable driver. Some mt76 drivers accept a
+monitor vif alongside managed despite not advertising it; this is **untested**
+here and would need your explicit approval to try.
+
+## WRAITH Nano (ESP32) — identified 2026-11-11
+
+| Item | Value |
+|------|-------|
+| Chip | ESP32-D0WD-V3, revision v3.1, dual core 240 MHz, Wi-Fi + BT |
+| Crystal | 40 MHz |
+| Flash | 4 MB, 3.3 V, manufacturer `0xA1` (Fudan), device `0x4016` |
+| USB-UART | Silicon Labs CP2102 (`10c4:ea60`) → `/dev/ttyUSB0` |
+| MAC | `38:3E:51:70:B2:A8` → sensor id `nano-70b2a8` |
+| PlatformIO board | `esp32dev` (matches 4 MB flash) |
+| ESP-IDF | 6.1.0 via platform espressif32 8.0.0, PlatformIO Core 6.2.0, esptool 5.4.0 |
+| Serial reliability | 460800 baud fails mid-transfer; 115200 reliable |
+| Module marking | not yet read from the can (not needed for the build) |
+
+The board previously ran another project (Arduino-ESP32 build, ESP-IDF
+v4.4.7, OTA partition layout with SPIFFS). A verified full-flash image is kept
+in `firmware/backups/` (gitignored, owner-only). Switch between projects with
+`scripts/esp32-switch.sh` (always backs up before writing).
+
+Limits that apply to any original ESP32: 2.4 GHz only (no 5/6 GHz), one channel
+at a time, promiscuous capture is best-effort (frames are missed, especially
+under load or while hopping), no decryption of protected payloads.
+
+### Serial link: adapter replay bursts (observed 2026-11-11)
+
+After the port has been closed for a while, opening it yields a burst of
+**replayed copies of the last USB packet** — measured up to ~850 KB/s, far
+above the ~11.5 KB/s a 115200-baud UART can carry, and none while the ESP32 is
+held in reset. The duplication therefore happens on the USB side (CP2102
+adapter or cp210x driver), not in WRAITH. No kernel errors are logged. During
+a burst, replayed fragments can also land inside real lines.
+
+Mitigations in WRAITH:
+- every line carries a CRC-32; corrupted lines are rejected, never stored;
+- the serial provider counts burst junk in its first 30 s as
+  `replayed_on_open` (no false "degraded" alarm) and keeps ingesting intact
+  lines during the burst;
+- after that, a link where junk dominates (≥ 50 unusable lines and > 5× the
+  valid events in 10 s) is reported as `degraded` with advice.
+
+If degraded warnings appear during normal running, try another USB port
+(directly on the PC, not a hub) or a shorter/better cable. The same adapter
+also fails esptool transfers at 460800 baud (115200 works).
+
+## LCD 16×2 with I2C backpack — UNKNOWN, DISABLED IN FIRMWARE
+
+`WRAITH_LCD_ENABLED` is `0` until these are verified:
+
+- [ ] Backpack chip (PCF8574 / PCF8574A) and address (commonly `0x27` or `0x3F`)
+- [ ] Supply voltage. Most HD44780 modules need 5 V for adequate contrast.
+- [ ] **Pull-up voltage on SDA/SCL.** Backpacks typically have 4.7–10 kΩ
+      pull-ups to their own VCC. If VCC is 5 V, SDA/SCL idle at 5 V.
+
+**ESP32 GPIOs are not 5 V tolerant.** If the backpack is powered from 5 V, do
+not connect SDA/SCL directly. Use a bidirectional I2C level shifter (e.g.
+BSS138-based), or remove the backpack's pull-ups and rely on 3.3 V pull-ups —
+only after confirming the PCF8574 recognizes 3.3 V as logic high at your supply
+voltage (V_IH ≈ 0.7 × VCC = 3.5 V at 5 V, so it often does **not**). Measure
+SDA/SCL to GND with the backpack powered and the ESP32 disconnected.
+
+Tentative wiring (after level shifting): SDA → GPIO21, SCL → GPIO22, GND → GND.

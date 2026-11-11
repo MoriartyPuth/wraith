@@ -1,0 +1,1 @@
+{"version":1,"event_id":"x-1","source":"wraith-nano","sensor_id":"nano-001","event_type":"wifi.disassoc_observed","timestamp":0,"seq":0,"bssid":"AA:BB:CC:DD:EE:FF","metadata":{"count":2,"window_ms":1000,"reason_codes":[8,8]}}

@@ -1,0 +1,1 @@
+{"version":1,"event_id":"a1b2c3d4-0","source":"wraith-nano","sensor_id":"nano-001","event_type":"sensor.heartbeat","timestamp":0,"seq":0,"metadata":{"uptime_ms":5000,"free_heap":180000,"channel":6,"queue_drops":0}}

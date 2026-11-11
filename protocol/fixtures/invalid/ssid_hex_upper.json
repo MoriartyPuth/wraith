@@ -1,0 +1,1 @@
+{"version":1,"event_id":"x-1","source":"wraith-nano","sensor_id":"nano-001","event_type":"wifi.ap_observed","timestamp":0,"seq":0,"channel":6,"bssid":"AA:BB:CC:DD:EE:FF","metadata":{"ssid":"a","ssid_hex":"4C","rssi":-5}}

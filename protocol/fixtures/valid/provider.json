@@ -1,0 +1,1 @@
+{"version":1,"event_id":"core-1","source":"wraith-core","sensor_id":"core","event_type":"capture.provider_status","timestamp":1794360000,"seq":1,"metadata":{"provider":"esp32-serial","state":"error","message":"/dev/ttyUSB0: no such file or directory (retrying in 2s)"}}

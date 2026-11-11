@@ -1,0 +1,129 @@
+// Centralized WRAITH Core API client. In demo mode every call is answered
+// from the labelled demo dataset instead of the network.
+import type {
+  AccessPoint, ApiErrorBody, EventQuery, Finding, Health, Observation, One, Paged, ProviderStatus, Sensor,
+  Statistics, StoredEvent, SystemInfo, WirelessInterface,
+} from "../types/api";
+import { isDemo } from "./mode";
+import * as demo from "./demo";
+
+export class ApiError extends Error {
+  constructor(public status: number, public code: string, message: string) {
+    super(message);
+  }
+}
+
+const BASE = "/api/v1";
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(BASE + path, { ...init, headers: { Accept: "application/json", ...init?.headers } });
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw e;
+    throw new ApiError(0, "unreachable", "WRAITH Core is unreachable");
+  }
+  const body: unknown = await res.json().catch(() => null);
+  if (!res.ok) {
+    const err = (body as ApiErrorBody | null)?.error;
+    throw new ApiError(res.status, err?.code ?? "http_error", err?.message ?? `HTTP ${res.status}`);
+  }
+  return body as T;
+}
+
+const get = <T,>(path: string, signal?: AbortSignal) => request<T>(path, { signal });
+const page = (limit = 50, offset = 0) => `limit=${limit}&offset=${offset}`;
+
+function paged<T>(all: T[], limit = 50, offset = 0): Paged<T> {
+  return { data: all.slice(offset, offset + limit), pagination: { limit, offset, total: all.length } };
+}
+
+function eventQuery(q: EventQuery): string {
+  const p = new URLSearchParams();
+  if (q.types?.length) p.set("type", q.types.join(","));
+  if (q.bssid) p.set("bssid", q.bssid);
+  if (q.sensor) p.set("sensor", q.sensor);
+  if (q.since) p.set("since", String(q.since));
+  if (q.until) p.set("until", String(q.until));
+  if (q.eventIds?.length) p.set("event_id", q.eventIds.join(","));
+  const s = p.toString();
+  return s ? "&" + s : "";
+}
+
+function demoEvents(q: EventQuery): StoredEvent[] {
+  return demo.events.filter((e) =>
+    (!q.types?.length || q.types.includes(e.event_type)) &&
+    (!q.bssid || e.bssid === q.bssid.toUpperCase()) &&
+    (!q.sensor || e.sensor_id === q.sensor) &&
+    (!q.since || e.received_at >= q.since) &&
+    (!q.until || e.received_at < q.until) &&
+    (!q.eventIds?.length || q.eventIds.includes(e.event_id)));
+}
+
+const resolve = <T,>(v: T) => Promise.resolve(structuredClone(v));
+const notFound = () => Promise.reject(new ApiError(404, "not_found", "resource not found"));
+
+export type SensorView = Sensor;
+
+export const api = {
+  health: (s?: AbortSignal) => (isDemo() ? resolve(demo.health) : get<Health>("/health", s)),
+  systemInfo: (s?: AbortSignal) => (isDemo() ? resolve(demo.info) : get<SystemInfo>("/system/info", s)),
+  statistics: (s?: AbortSignal) => (isDemo() ? resolve(demo.statistics()) : get<Statistics>("/statistics", s)),
+  captureStatus: (s?: AbortSignal) =>
+    isDemo() ? resolve({ data: demo.providers }) : get<{ data: ProviderStatus[] }>("/capture/status", s),
+  captureInterfaces: (s?: AbortSignal) =>
+    isDemo() ? resolve({ data: [] as WirelessInterface[] }) : get<{ data: WirelessInterface[] }>("/capture/interfaces", s),
+
+  sensors: (limit?: number, offset?: number, s?: AbortSignal) =>
+    isDemo() ? resolve(paged([demo.sensor], limit, offset)) : get<Paged<Sensor>>(`/sensors?${page(limit, offset)}`, s),
+
+  accessPoints: (limit?: number, offset?: number, s?: AbortSignal) =>
+    isDemo() ? resolve(paged(demo.aps, limit, offset)) : get<Paged<AccessPoint>>(`/access-points?${page(limit, offset)}`, s),
+  accessPoint: (bssid: string, s?: AbortSignal) => {
+    if (isDemo()) {
+      const a = demo.aps.find((x) => x.bssid === bssid.toUpperCase());
+      return a ? resolve({ data: a }) : notFound();
+    }
+    return get<One<AccessPoint>>(`/access-points/${encodeURIComponent(bssid)}`, s);
+  },
+  observations: (bssid: string, limit = 500, s?: AbortSignal) =>
+    isDemo() ? resolve({ data: demo.observations(bssid.toUpperCase()).slice(0, limit) })
+      : get<{ data: Observation[] }>(`/access-points/${encodeURIComponent(bssid)}/observations?limit=${limit}`, s),
+
+  events: (q: EventQuery = {}, limit?: number, offset?: number, s?: AbortSignal) =>
+    isDemo() ? resolve(paged(demoEvents(q), limit, offset))
+      : get<Paged<StoredEvent>>(`/events?${page(limit, offset)}${eventQuery(q)}`, s),
+
+  detections: (limit?: number, offset?: number, s?: AbortSignal) =>
+    isDemo() ? resolve(paged(demo.findings, limit, offset)) : get<Paged<Finding>>(`/detections?${page(limit, offset)}`, s),
+  setFindingStatus: (id: string, status: Finding["status"]) => {
+    if (isDemo()) {
+      const f = demo.findings.find((x) => x.id === id);
+      if (!f) return notFound();
+      f.status = status;
+      f.updated_at = Date.now();
+      return resolve({ data: f });
+    }
+    return request<One<Finding>>(`/detections/${encodeURIComponent(id)}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }),
+    });
+  },
+};
+
+/** Fetch all pages of an event query (for export), up to `max` rows. */
+export async function fetchAllEvents(q: EventQuery, max = 10000): Promise<{ rows: StoredEvent[]; total: number }> {
+  const rows: StoredEvent[] = [];
+  let total = 0;
+  while (rows.length < max) {
+    const r = await api.events(q, Math.min(500, max - rows.length), rows.length);
+    total = r.pagination.total;
+    rows.push(...r.data);
+    if (r.data.length === 0 || rows.length >= total) break;
+  }
+  return { rows, total };
+}
+
+export function wsURL(): string {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${location.host}${BASE}/ws`;
+}

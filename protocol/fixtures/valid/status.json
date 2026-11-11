@@ -1,0 +1,1 @@
+{"version":1,"event_id":"a1b2c3d4-1","source":"wraith-nano","sensor_id":"nano-001","event_type":"sensor.status","timestamp":0,"seq":1,"metadata":{"state":"online","firmware_version":"0.1.0","board":"esp32dev","capabilities":["wifi-2.4ghz","promiscuous","lcd"]}}

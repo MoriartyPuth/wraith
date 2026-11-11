@@ -1,0 +1,27 @@
+# Firmware
+firmware/.pio/
+firmware/sdkconfig
+firmware/sdkconfig.*
+!firmware/sdkconfig.defaults
+firmware/managed_components/
+firmware/dependencies.lock
+
+# Core
+core/wraith
+*.db
+*.db-shm
+*.db-wal
+
+# Dashboard
+dashboard/node_modules/
+dashboard/dist/
+dashboard/.env*
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Full flash images of physical boards (may contain secrets, e.g. Wi-Fi credentials)
+firmware/backups/

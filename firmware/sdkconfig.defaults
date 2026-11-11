@@ -1,0 +1,21 @@
+# WRAITH Nano ESP-IDF defaults. Only settings WRAITH depends on live here.
+
+# Console / transport: events share UART0 with logs at 115200 baud.
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+# 115200 baud is the ESP-IDF 6 default (only settable with ESP_CONSOLE_UART_CUSTOM).
+
+# Keep runtime logging quiet so protocol lines dominate the link.
+# Receivers still tolerate interleaved log lines (docs/protocol.md).
+CONFIG_LOG_DEFAULT_LEVEL_WARN=y
+
+# Wi-Fi: no persistent credential storage; WRAITH never joins networks.
+CONFIG_ESP_WIFI_NVS_ENABLED=n
+
+# FreeRTOS tick at 1 kHz for finer channel-dwell timing.
+CONFIG_FREERTOS_HZ=1000
+
+# Stack overflow checks during development.
+CONFIG_FREERTOS_CHECK_STACKOVERFLOW_CANARY=y
+
+# app_main builds status events on its stack (1 KiB message buffer).
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=6144

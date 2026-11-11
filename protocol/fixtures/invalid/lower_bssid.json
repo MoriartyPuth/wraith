@@ -1,0 +1,1 @@
+{"version":1,"event_id":"x-1","source":"wraith-nano","sensor_id":"nano-001","event_type":"wifi.pmf_observed","timestamp":0,"seq":0,"bssid":"aa:bb:cc:dd:ee:ff","metadata":{"pmf":"capable","rsn_present":true}}
