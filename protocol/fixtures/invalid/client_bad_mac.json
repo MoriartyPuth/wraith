@@ -1,0 +1,1 @@
+{"version":3,"event_id":"c0ffee01-53","source":"wraith-nano","sensor_id":"nano-70b2a8","event_type":"wifi.client_observed","timestamp":0,"seq":53,"channel":6,"bssid":"AA:BB:CC:DD:EE:FF","metadata":{"client":"nope","frames":3,"window_ms":100}}

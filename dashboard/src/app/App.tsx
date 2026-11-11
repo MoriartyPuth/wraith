@@ -9,6 +9,7 @@ const Overview = lazy(() => import("../pages/Overview"));
 const WirelessMonitor = lazy(() => import("../pages/WirelessMonitor"));
 const AccessPoints = lazy(() => import("../pages/AccessPoints"));
 const APDetail = lazy(() => import("../pages/APDetail"));
+const Clients = lazy(() => import("../pages/Clients"));
 const SecurityEvents = lazy(() => import("../pages/SecurityEvents"));
 const Detections = lazy(() => import("../pages/Detections"));
 const PMFInspector = lazy(() => import("../pages/PMFInspector"));
@@ -27,6 +28,7 @@ export function App() {
             <Route path="monitor" element={<WirelessMonitor />} />
             <Route path="access-points" element={<AccessPoints />} />
             <Route path="access-points/:bssid" element={<APDetail />} />
+            <Route path="clients" element={<Clients />} />
             <Route path="events" element={<SecurityEvents />} />
             <Route path="detections" element={<Detections />} />
             <Route path="pmf" element={<PMFInspector />} />

@@ -226,3 +226,19 @@ size_t proto_mgmt_observed(char *buf, size_t cap, const proto_identity_t *id, ui
     jw_kv_bool(&jw, "protected", m->protected_frame);
     return proto_end(&jw);
 }
+
+size_t proto_client_observed(char *buf, size_t cap, const proto_identity_t *id, uint32_t seq,
+                             int channel, const uint8_t bssid[6], const uint8_t client[6],
+                             int rssi, uint32_t frames, uint32_t window_ms)
+{
+    char mac[18];
+    json_writer_t jw;
+    jw_init(&jw, buf, cap);
+    proto_begin(&jw, id, EVT_CLIENT_OBSERVED, seq, channel, bssid);
+    proto_format_mac(mac, client);
+    jw_kv_string(&jw, "client", mac);
+    jw_kv_uint(&jw, "frames", frames < 1 ? 1 : frames);
+    jw_kv_uint(&jw, "window_ms", window_ms < 1 ? 1 : window_ms);
+    jw_kv_int(&jw, "rssi", clamp_rssi(rssi));
+    return proto_end(&jw);
+}

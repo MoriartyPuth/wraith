@@ -11,7 +11,7 @@ import { describeEvent } from "../utils/describe";
 import { isoTime } from "../utils/format";
 
 const TYPES = ["wifi.ap_observed", "wifi.beacon_observed", "wifi.pmf_observed", "wifi.deauth_observed",
-  "wifi.disassoc_observed", "sensor.status", "sensor.heartbeat"];
+  "wifi.disassoc_observed", "wifi.client_observed", "sensor.status", "sensor.heartbeat", "tx.ack", "tx.report"];
 const PAGE = 100;
 const EXPORT_MAX = 10000;
 

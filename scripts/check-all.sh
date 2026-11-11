@@ -13,6 +13,9 @@ step "firmware: host unit tests" "$root/scripts/firmware-host-tests.sh"
 step "protocol: firmware output vs Go validator + fixtures" "$root/scripts/check-protocol.sh"
 if command -v pio >/dev/null; then
   step "firmware: pio run" bash -c "cd '$root/firmware' && pio run"
+  # Gated TX build: catches breakage in the STA-mode path, the raw-frame
+  # override and the TX flag wiring (docs/tx.md). Never flashes.
+  step "firmware: pio run -e tx" bash -c "cd '$root/firmware' && pio run -e tx"
 else
   echo; echo "== firmware: pio run"; echo "-- SKIPPED (PlatformIO not installed)"
 fi

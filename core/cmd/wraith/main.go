@@ -110,10 +110,14 @@ func run(args []string) error {
 	for _, st := range mgr.Statuses() {
 		log.Info("capture provider", "provider", st.Name, "state", st.State, "msg", st.Message)
 	}
+	if cfg.TXEnabled {
+		log.Warn("deauth test transmission ENABLED: POST /api/v1/tx forwards deauth/disassoc bursts to the sensor; use only on networks you are authorized to test (docs/tx.md)")
+	}
 
 	handler := api.NewRouter(api.Deps{
 		Store: store, Capture: mgr, Log: log, Started: time.Now(), AllowedHosts: cfg.AllowedHosts,
-		Stream: hub,
+		Stream:    hub,
+		TXEnabled: cfg.TXEnabled,
 		RuntimeStats: func() map[string]uint64 {
 			return map[string]uint64{
 				"ingested": pipe.Ingested.Load(), "duplicates": pipe.Duplicates.Load(),

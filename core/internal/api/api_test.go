@@ -215,3 +215,16 @@ func TestSensorConnectedFlag(t *testing.T) {
 		t.Fatalf("connected flags: %v", got)
 	}
 }
+
+func TestEncodedBSSIDPath(t *testing.T) {
+	srv := newTestServer(t)
+	// Browsers/clients may encode the MAC colons as %3A; the handler must
+	// decode before validating (regression: AP detail page returned 400).
+	const bssid = "64%3A13%3AAB%3AA5%3A53%3AE8"
+	if code, body := get(t, srv, "/api/v1/access-points/"+bssid); code != 404 {
+		t.Fatalf("encoded detail: %d %v (want 404 not-found)", code, body)
+	}
+	if code, body := get(t, srv, "/api/v1/access-points/"+bssid+"/observations"); code != 200 {
+		t.Fatalf("encoded observations: %d %v", code, body)
+	}
+}

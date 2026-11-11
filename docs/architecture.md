@@ -7,7 +7,7 @@
    │ (copy ≤512 B, ring buf)    │ framing, CRC-32 check                Vite, Tailwind
  processing task                ▼                                      Recharts
    │ frame/beacon parse       validate (events.Parse)
-   │ AP tracker, mgmt windows   dedup / seq gaps
+   │ AP tracker, mgmt + client tracker   dedup / seq gaps
  serializer (json + CRC-32)   persist (SQLite)
    │                          detection ─▶ findings
  transport task ── USB serial ──▶          REST /api/v1 ◀──────────── fetch / poll
@@ -24,6 +24,7 @@ serial provider ───▶ ingest.Pipeline.Run ─▶ per event, one SQLite tr
   hot-plug retry, link     │
   health / open grace)     │
                           │   events row · sensor state · AP upsert · RSSI observation
+                          │   client sighting upsert (wifi.client_observed)
                           │   detection.Engine (sees AP before/after) · findings
                           └─▶ after commit: stream.Hub.Publish → WebSocket clients
 ```
@@ -35,7 +36,7 @@ HTTP → close the database.
 
 ## Principles
 
-- **One schema.** `docs/protocol.md` + `protocol/schemas/event.v1.schema.json`.
+- **One schema.** `docs/protocol.md` + `protocol/schemas/event.v3.schema.json`.
   The Go validator is the reference; firmware output is checked against it by
   `scripts/check-protocol.sh`. Strict: unknown fields are rejected.
 - **Providers are interchangeable.** Detection consumes `events.Event`
@@ -46,6 +47,11 @@ HTTP → close the database.
   sensor, and counts rejected lines by reason.
 - **Read-only host.** Core never changes interface modes or NetworkManager.
   Monitor-mode interfaces are prepared by the operator.
+- **Passive by default, gated TX.** Core itself only ever *writes* to the
+  sensor link when the operator enables it: the deauth test transmission path
+  (docs/tx.md) forwards one rate-limited command line through the serial
+  provider (`capture.Commander`) behind `-tx` + `confirm`. Without those gates
+  the host→device direction carries only `PING`.
 - **Local-first.** Core binds `127.0.0.1:8088` by default and rejects requests
   whose `Host` header is not loopback (DNS-rebinding guard). No cloud services.
 
@@ -59,11 +65,14 @@ HTTP → close the database.
 | `firmware/src/transport.c` | Message buffer + single writer task on UART0 |
 | `firmware/src/system_status.c` | Identity (MAC + boot id), state, heartbeat task |
 | `firmware/src/{wifi_monitor,beacon_parser,management_monitor}.c` | Passive monitoring, parsing, aggregation |
-| `firmware/src/{lcd,lcd_screens,host_link}.c` | LCD display, host-link ping listener |
+| `firmware/src/client_tracker.c` | Station sightings from data-frame headers (protocol v3) |
+| `firmware/src/{lcd,lcd_screens,host_link}.c` | LCD display, host-link ping listener, TX command parsing |
+| `firmware/src/tx_test.c` | Gated deauth test transmission engine (frame builder, limits, burst state machine) |
+| `firmware/src/tx_raw_override.c` | TX build only: allows validated deauth/disassoc frames past the driver's raw-frame check |
 | `firmware/src/detection.c` | On-device stub; detection lives in Core |
-| `core/internal/events` | Event model + strict v1 validator |
+| `core/internal/events` | Event model + strict v1/v2/v3 validator |
 | `core/internal/transport` | Line framing (bounded, fragment-safe), dedup/seq tracking |
-| `core/internal/storage` | SQLite (modernc, no CGO), embedded migrations, queries |
+| `core/internal/storage` | SQLite (modernc, no CGO), embedded migrations, AP/client inventory, queries |
 | `core/internal/capture` | Provider interface and manager (WRAITH's only source is the ESP32) |
 | `core/internal/capture/serial` | ESP32 serial provider: raw termios, framing, validation, reconnect |
 | `core/internal/ingest` | Ingestion pipeline (single writer) |

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -36,6 +37,9 @@ type Deps struct {
 	Stream http.Handler
 	// RuntimeStats adds live counters (ingestion, stream) to /statistics.
 	RuntimeStats func() map[string]uint64
+	// TXEnabled reflects config.TXEnabled: whether POST /api/v1/tx is
+	// available (deauth test transmission, docs/tx.md).
+	TXEnabled bool
 	// Now is the clock (tests).
 	Now func() time.Time
 }
@@ -101,6 +105,8 @@ func (h *handlers) routes(r chi.Router) {
 		r.Get("/access-points", h.listAPs)
 		r.Get("/access-points/{bssid}", h.getAP)
 		r.Get("/access-points/{bssid}/observations", h.apObservations)
+		r.Get("/access-points/{bssid}/clients", h.apClients)
+		r.Get("/clients", h.listClients)
 		r.Get("/events", h.listEvents)
 		r.Get("/events/{id}", h.getEvent)
 		r.Get("/detections", h.listFindings)
@@ -109,6 +115,7 @@ func (h *handlers) routes(r chi.Router) {
 		r.Get("/capture/status", h.captureStatus)
 		r.Get("/capture/interfaces", h.captureInterfaces)
 		r.Get("/statistics", h.statistics)
+		r.Post("/tx", h.txSend)
 	}
 }
 
@@ -130,6 +137,7 @@ func (h *handlers) health(w http.ResponseWriter, r *http.Request) {
 func (h *handlers) systemInfo(w http.ResponseWriter, r *http.Request) {
 	info := system.Collect(h.d.Started)
 	info.ProtocolVer = events.ProtocolVersion
+	info.TXEnabled = h.d.TXEnabled
 	if v, err := h.d.Store.SchemaVersion(r.Context()); err == nil {
 		info.SchemaVersion = v
 	}
@@ -175,12 +183,36 @@ func (h *handlers) listAPs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handlers) getAP(w http.ResponseWriter, r *http.Request) {
-	bssid := strings.ToUpper(chi.URLParam(r, "bssid"))
+	bssid := strings.ToUpper(pathParam(r, "bssid"))
 	if !reMAC.MatchString(bssid) {
 		writeErr(w, http.StatusBadRequest, "invalid_parameter", "bssid must be AA:BB:CC:DD:EE:FF")
 		return
 	}
 	one(w, r, func(ctx context.Context) (storage.AccessPoint, error) { return h.d.Store.GetAccessPoint(ctx, bssid) })
+}
+
+// listClients returns station sightings (protocol v3), optionally for one AP.
+func (h *handlers) listClients(w http.ResponseWriter, r *http.Request) {
+	bssid := strings.ToUpper(r.URL.Query().Get("bssid"))
+	if bssid != "" && !reMAC.MatchString(bssid) {
+		writeErr(w, http.StatusBadRequest, "invalid_parameter", "bssid must be AA:BB:CC:DD:EE:FF")
+		return
+	}
+	paged(w, r, func(ctx context.Context, p storage.Page) ([]storage.Client, int, error) {
+		return h.d.Store.ListClients(ctx, p, bssid)
+	})
+}
+
+// apClients returns the station sightings recorded for one BSSID.
+func (h *handlers) apClients(w http.ResponseWriter, r *http.Request) {
+	bssid := strings.ToUpper(pathParam(r, "bssid"))
+	if !reMAC.MatchString(bssid) {
+		writeErr(w, http.StatusBadRequest, "invalid_parameter", "bssid must be AA:BB:CC:DD:EE:FF")
+		return
+	}
+	paged(w, r, func(ctx context.Context, p storage.Page) ([]storage.Client, int, error) {
+		return h.d.Store.ListClients(ctx, p, bssid)
+	})
 }
 
 func (h *handlers) listEvents(w http.ResponseWriter, r *http.Request) {
@@ -217,7 +249,7 @@ func (h *handlers) getFinding(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handlers) apObservations(w http.ResponseWriter, r *http.Request) {
-	bssid := strings.ToUpper(chi.URLParam(r, "bssid"))
+	bssid := strings.ToUpper(pathParam(r, "bssid"))
 	if !reMAC.MatchString(bssid) {
 		writeErr(w, http.StatusBadRequest, "invalid_parameter", "bssid must be AA:BB:CC:DD:EE:FF")
 		return
@@ -344,6 +376,152 @@ func (h *handlers) captureInterfaces(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"data": ifs})
 }
 
+// Limits mirroring the firmware build's defaults (wraith_config.h) and
+// docs/tx.md; the sensor re-validates and rejects anything else.
+const (
+	txMaxFrames       = 10
+	txMinIntervalMS   = 100
+	txMaxIntervalMS   = 10000
+	txDefaultReason   = 7 // "Class 3 frame received from nonassociated STA"
+	txDefaultFrames   = 1
+	txDefaultInterval = txMinIntervalMS
+)
+
+// txSend forwards one deauth/disassoc test request to the connected sensor.
+// It is the only mutating capture path in WRAITH and is gated four times:
+// Core config (-tx), an explicit confirm flag, target inventory (the AP must
+// have been observed on a 2.4 GHz channel), and the sensor-side limits.
+func (h *handlers) txSend(w http.ResponseWriter, r *http.Request) {
+	if !h.d.TXEnabled {
+		writeErr(w, http.StatusForbidden, "tx_disabled",
+			"deauth test transmission is disabled; start Core with -tx (or config tx_enabled) — authorized networks only, see docs/tx.md")
+		return
+	}
+	// Requiring a JSON content type forces a CORS preflight for cross-site
+	// requests, which Core never approves (no CORS headers): CSRF protection.
+	if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		writeErr(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "Content-Type must be application/json")
+		return
+	}
+	var body struct {
+		Kind       string `json:"kind"`
+		BSSID      string `json:"bssid"`
+		Client     string `json:"client"`
+		Reason     *int   `json:"reason"`
+		Count      *int   `json:"count"`
+		IntervalMS *int   `json:"interval_ms"`
+		Confirm    bool   `json:"confirm"`
+	}
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid_body",
+			`expected {"kind","bssid","client","reason?","count?","interval_ms?","confirm"}`)
+		return
+	}
+	if !body.Confirm {
+		writeErr(w, http.StatusBadRequest, "confirm_required",
+			"set confirm=true to acknowledge you are authorized to test this network")
+		return
+	}
+	if body.Kind != "deauth" && body.Kind != "disassoc" {
+		writeErr(w, http.StatusBadRequest, "invalid_body", "kind must be deauth or disassoc")
+		return
+	}
+	bssid := strings.ToUpper(body.BSSID)
+	client := strings.ToUpper(body.Client)
+	if !reMAC.MatchString(bssid) {
+		writeErr(w, http.StatusBadRequest, "invalid_body", "bssid must be AA:BB:CC:DD:EE:FF")
+		return
+	}
+	if !reMAC.MatchString(client) {
+		writeErr(w, http.StatusBadRequest, "invalid_body", "client must be AA:BB:CC:DD:EE:FF")
+		return
+	}
+	if client == "FF:FF:FF:FF:FF:FF" {
+		writeErr(w, http.StatusBadRequest, "invalid_body",
+			"broadcast client is not allowed through the API (kick-all bursts are not offered)")
+		return
+	}
+	if client == bssid {
+		writeErr(w, http.StatusBadRequest, "invalid_body", "client must differ from bssid")
+		return
+	}
+	reason := txDefaultReason
+	if body.Reason != nil {
+		if *body.Reason < 0 || *body.Reason > 65535 {
+			writeErr(w, http.StatusBadRequest, "invalid_body", "reason must be 0-65535")
+			return
+		}
+		reason = *body.Reason
+	}
+	count := txDefaultFrames
+	if body.Count != nil {
+		if *body.Count < 1 || *body.Count > txMaxFrames {
+			writeErr(w, http.StatusBadRequest, "invalid_body", fmt.Sprintf("count must be 1-%d", txMaxFrames))
+			return
+		}
+		count = *body.Count
+	}
+	interval := txDefaultInterval
+	if body.IntervalMS != nil {
+		if *body.IntervalMS < txMinIntervalMS || *body.IntervalMS > txMaxIntervalMS {
+			writeErr(w, http.StatusBadRequest, "invalid_body",
+				fmt.Sprintf("interval_ms must be %d-%d", txMinIntervalMS, txMaxIntervalMS))
+			return
+		}
+		interval = *body.IntervalMS
+	}
+	// The radio must transmit on the AP's channel: only BSSIDs WRAITH has
+	// actually observed are testable, and only on their 2.4 GHz channel.
+	ap, err := h.d.Store.GetAccessPoint(r.Context(), bssid)
+	if errors.Is(err, storage.ErrNotFound) {
+		writeErr(w, http.StatusConflict, "target_not_observed",
+			"WRAITH has never observed this BSSID; the sensor does not know where it listens")
+		return
+	}
+	if err != nil {
+		internal(w, h.d.Log, err)
+		return
+	}
+	if ap.LastChannel == nil || *ap.LastChannel < 1 || *ap.LastChannel > 14 {
+		writeErr(w, http.StatusConflict, "target_channel_unknown",
+			"the last observed channel of this BSSID is not a 2.4 GHz channel")
+		return
+	}
+	if h.captureNotRunning() {
+		writeErr(w, http.StatusConflict, "sensor_not_connected",
+			"no capture provider is connected; the sensor must be online")
+		return
+	}
+	line := fmt.Sprintf("TX_%s %s %s %d %d %d %d",
+		strings.ToUpper(body.Kind), bssid, client, count, interval, reason, *ap.LastChannel)
+	if err := h.d.Capture.SendCommand(line); err != nil {
+		h.d.Log.Warn("tx command failed", "err", err)
+		writeErr(w, http.StatusBadGateway, "tx_send_failed", "the command could not be delivered to the sensor")
+		return
+	}
+	h.d.Log.Info("deauth test requested", "kind", body.Kind, "bssid", bssid, "client", client,
+		"count", count, "interval_ms", interval, "reason", reason, "channel", *ap.LastChannel)
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"data": map[string]any{
+			"kind": body.Kind, "bssid": bssid, "client": client,
+			"reason": reason, "count": count, "interval_ms": interval,
+			"channel": *ap.LastChannel,
+			"note":    "the sensor acknowledges via tx.ack and reports the burst via tx.report (see /events?type=tx.ack,tx.report)",
+		},
+	})
+}
+
+func (h *handlers) captureNotRunning() bool {
+	for _, st := range h.d.Capture.Statuses() {
+		if st.State == capture.StateRunning || st.State == capture.StateDegraded {
+			return false
+		}
+	}
+	return true
+}
+
 func (h *handlers) statistics(w http.ResponseWriter, r *http.Request) {
 	st, err := h.d.Store.Statistics(r.Context())
 	if err != nil {
@@ -433,6 +611,17 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func writeErr(w http.ResponseWriter, code int, errCode, msg string) {
 	writeJSON(w, code, map[string]any{"error": map[string]string{"code": errCode, "message": msg}})
+}
+
+// pathParam returns a URL path parameter, decoding percent-escapes first.
+// Clients commonly encode MAC colons as %3A; chi passes the raw segment, so
+// "64%3A13%3A..." must become "64:13:..." before validation.
+func pathParam(r *http.Request, name string) string {
+	v := chi.URLParam(r, name)
+	if d, err := url.PathUnescape(v); err == nil {
+		return d
+	}
+	return v
 }
 
 // hostGuard rejects requests whose Host header is not a loopback name or an

@@ -4,5 +4,6 @@
   "serial_baud": 115200,
   "event_retention_days": 7,
   "prune_interval_minutes": 60,
+  "tx_enabled": false,
   "log_format": "json"
 }

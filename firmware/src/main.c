@@ -61,6 +61,10 @@ void app_main(void)
     if (wifi_err == ESP_OK) {
         system_status_add_capability("wifi-2.4ghz");
         system_status_add_capability("promiscuous");
+        system_status_add_capability("client-discovery");
+#if WRAITH_TX_ENABLED
+        system_status_add_capability("deauth-tx");
+#endif
         s_wifi_ok = true;
     } else {
         degraded = true;

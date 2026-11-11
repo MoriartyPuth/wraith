@@ -1,4 +1,4 @@
-// Package events defines the WRAITH v1 event envelope and its strict
+// Package events defines the WRAITH event envelope and its strict
 // validator. This is the reference implementation of docs/protocol.md and is
 // tested against protocol/fixtures.
 package events
@@ -8,8 +8,9 @@ import (
 	"time"
 )
 
-// ProtocolVersion is the only envelope version this build accepts.
-const ProtocolVersion = 1
+// ProtocolVersion is the newest envelope version this build emits and
+// accepts; v1 sensors keep working (see validate.go).
+const ProtocolVersion = 3
 
 // MaxMessageSize is the maximum size of one serialized event, including the
 // trailing newline when framed on a serial link.
@@ -24,8 +25,12 @@ const (
 	TypeDeauthObserved = "wifi.deauth_observed"
 	TypeDisassocObs    = "wifi.disassoc_observed"
 	TypePMFObserved    = "wifi.pmf_observed"
-	TypeFinding        = "detection.finding"
-	TypeProviderStatus = "capture.provider_status"
+	// TypeWifiClientObserved: a station was seen exchanging data with an AP (v3).
+	TypeWifiClientObserved = "wifi.client_observed"
+	TypeTxAck              = "tx.ack"
+	TypeTxReport           = "tx.report"
+	TypeFinding            = "detection.finding"
+	TypeProviderStatus     = "capture.provider_status"
 )
 
 // Sources.
@@ -34,7 +39,7 @@ const (
 	SourceCore = "wraith-core"
 )
 
-// Event is a validated v1 event. Metadata is kept raw; typed views are
+// Event is a validated event (v1–v3). Metadata is kept raw; typed views are
 // decoded on demand by consumers so the envelope stays cheap to pass around.
 type Event struct {
 	Version   int             `json:"version"`
@@ -125,6 +130,33 @@ type StatusMeta struct {
 	Board           string   `json:"board,omitempty"`
 	Capabilities    []string `json:"capabilities"`
 	Message         string   `json:"message,omitempty"`
+}
+
+// TxAckMeta is the metadata of tx.ack (deauth test transmission, docs/tx.md).
+type TxAckMeta struct {
+	Command string `json:"command"` // deauth | disassoc | status
+	Status  string `json:"status"`  // accepted | rejected
+	Detail  string `json:"detail,omitempty"`
+	Client  string `json:"client,omitempty"`
+}
+
+// TxReportMeta is the metadata of tx.report.
+type TxReportMeta struct {
+	Command   string `json:"command"`
+	Client    string `json:"client"`
+	Reason    int    `json:"reason"`
+	Sent      int    `json:"sent"`
+	Requested int    `json:"requested"`
+	Outcome   string `json:"outcome"` // complete | aborted_host_lost | aborted_radio
+}
+
+// ClientMeta is the metadata of wifi.client_observed (v3): an aggregated
+// station sighting, not guaranteed association state.
+type ClientMeta struct {
+	Client   string `json:"client"`
+	Frames   int    `json:"frames"`
+	WindowMS int    `json:"window_ms"`
+	RSSI     *int   `json:"rssi,omitempty"`
 }
 
 // DecodeMeta decodes e.Metadata into v.

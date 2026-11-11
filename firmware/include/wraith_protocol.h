@@ -1,4 +1,4 @@
-/* WRAITH event protocol v1 — firmware side. Mirrors docs/protocol.md and
+/* WRAITH event protocol v3 — firmware side. Mirrors docs/protocol.md and
  * core/internal/events. Hardware-independent: compiled on host for tests. */
 #pragma once
 
@@ -28,6 +28,9 @@ uint32_t proto_crc32(const void *data, size_t len);
 #define EVT_DEAUTH_OBSERVED "wifi.deauth_observed"
 #define EVT_DISASSOC_OBSERVED "wifi.disassoc_observed"
 #define EVT_PMF_OBSERVED "wifi.pmf_observed"
+#define EVT_CLIENT_OBSERVED "wifi.client_observed" /* station seen sending data (v3) */
+#define EVT_TX_ACK "tx.ack"         /* deauth test transmission: command response (docs/tx.md) */
+#define EVT_TX_REPORT "tx.report"   /* deauth test transmission: burst outcome (docs/tx.md) */
 #define EVT_DETECTION_FINDING "detection.finding"
 
 /* Identity fixed at boot. */
@@ -93,6 +96,11 @@ typedef struct {
 
 size_t proto_mgmt_observed(char *buf, size_t cap, const proto_identity_t *id, uint32_t seq,
                            const proto_mgmt_t *m);
+
+/* One aggregated client (station) sighting for an AP (v3). */
+size_t proto_client_observed(char *buf, size_t cap, const proto_identity_t *id, uint32_t seq,
+                             int channel, const uint8_t bssid[6], const uint8_t client[6],
+                             int rssi, uint32_t frames, uint32_t window_ms);
 
 /* Format a MAC as "AA:BB:CC:DD:EE:FF" into out[18]. */
 void proto_format_mac(char out[18], const uint8_t mac[6]);

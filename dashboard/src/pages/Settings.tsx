@@ -44,11 +44,16 @@ export default function Settings() {
           <Async state={info}>{(d) => (
             <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm">
               {([["Version", d.version], ["Host", d.hostname], ["OS", d.os], ["Kernel", d.kernel], ["Go", d.go_version],
-                ["DB schema", `v${d.schema_version}`], ["Protocol", `v${d.protocol_version}`], ["Live stream", live.state]] as const).map(([k, v]) => (
+                ["DB schema", `v${d.schema_version}`], ["Protocol", `v${d.protocol_version}`],
+                ["Deauth test TX", d.tx_enabled ? "enabled" : "disabled"], ["Live stream", live.state]] as const).map(([k, v]) => (
                 <div key={k} className="contents"><dt className="text-ink-3">{k}</dt><dd className="font-mono text-xs leading-5">{v}</dd></div>
               ))}
             </dl>
           )}</Async>
+          <p className="mt-3 text-xs text-ink-3">
+            "Deauth test TX" enables POST /api/v1/tx (deauth burst requests to sensors, docs/tx.md). It is off by
+            default; start Core with -tx (or config tx_enabled) if you are authorized to test the observed networks.
+          </p>
         </Panel>
         <Panel title="Capture">
           <Async state={providers}>{(d) => <ProviderList providers={d.data} />}</Async>

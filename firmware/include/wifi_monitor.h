@@ -1,9 +1,9 @@
 /* Passive 2.4 GHz monitoring: promiscuous mode in WIFI_MODE_NULL (the radio
- * never associates and never transmits), management-frame filter, controlled
+ * never associates and never transmits), management+data frame filter, controlled
  * channel hopping.
  *
  * The promiscuous RX callback runs in the Wi-Fi driver task. It only filters
- * beacon / deauth / disassoc frames, reserves space in a ring buffer
+ * beacon / deauth / disassoc + data frames, reserves space in a ring buffer
  * (non-blocking; full buffer => counted drop) and copies at most
  * WRAITH_SNAPLEN bytes plus RSSI/channel. A processing task parses frames,
  * feeds ap_tracker / mgmt_monitor and hops channels. No allocation, logging,

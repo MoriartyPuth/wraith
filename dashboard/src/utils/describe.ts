@@ -35,8 +35,25 @@ export function describeEvent(e: StoredEvent): string {
         : m.protected ? "encrypted (PMF-protected frame)" : "none";
       return `${num(m.count)} ${kind} frame(s) in ${num(m.window_ms)} ms → ${dst} · reason ${reasons}${m.protected ? " · protected" : ""}`;
     }
+    case "wifi.client_observed": {
+      const frames = num(m.frames) ?? 1;
+      const rssi = num(m.rssi);
+      return `Client ${str(m.client) ?? "?"} seen · ${frames} frame(s)${rssi !== undefined ? ` · ${rssi} dBm` : ""}`;
+    }
     case "detection.finding":
       return str(m.explanation) ?? "Finding";
+    case "tx.ack": {
+      const cmd = str(m.command) ?? "tx";
+      return `Sensor ${str(m.status) ?? "?"} the ${cmd} command${str(m.detail) ? ` — ${m.detail}` : ""}`;
+    }
+    case "tx.report": {
+      const sent = num(m.sent) ?? 0;
+      const asked = num(m.requested) ?? 0;
+      const outcome = str(m.outcome) ?? "?";
+      const detail: string[] = [`${sent} of ${asked} frame(s) sent`, `outcome ${outcome}`];
+      if (num(m.reason) !== undefined) detail.push(`reason ${m.reason} (${reasonName(num(m.reason)!)})`);
+      return `${str(m.command) ?? "tx"} burst: ${detail.join(" · ")}`;
+    }
     default:
       return e.event_type;
   }

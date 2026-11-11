@@ -22,16 +22,20 @@ else
 fi
 "$cc" -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -g \
   "${san[@]}" \
-  -D WRAITH_HOST_TEST -D WRAITH_PROTOCOL_VERSION=1 \
+  -D WRAITH_HOST_TEST -D WRAITH_PROTOCOL_VERSION=3 \
   -I "$root/firmware/include" \
   "$root/firmware/test/host/test_host.c" \
   "$root/firmware/test/host/test_wifi.c" \
+  "$root/firmware/test/host/test_tx.c" \
+  "$root/firmware/test/host/test_client.c" \
   "$root/firmware/src/json_writer.c" \
   "$root/firmware/src/protocol.c" \
   "$root/firmware/src/frame_parser.c" \
   "$root/firmware/src/beacon_parser.c" \
   "$root/firmware/src/ap_tracker.c" \
   "$root/firmware/src/management_monitor.c" \
+  "$root/firmware/src/client_tracker.c" \
+  "$root/firmware/src/tx_test.c" \
   "$root/firmware/src/lcd_screens.c" \
   -o "$out/test_host"
 "$out/test_host" "$@"

@@ -38,3 +38,28 @@ func TestRejectsUnknownFileKeysAndBadValues(t *testing.T) {
 		t.Error("bad listen addr accepted")
 	}
 }
+
+func TestTXEnabledSources(t *testing.T) {
+	if cfg, err := Load(nil); err != nil || cfg.TXEnabled {
+		t.Fatalf("default tx_enabled = %v (err %v)", cfg.TXEnabled, err)
+	}
+	t.Setenv("WRAITH_TX_ENABLED", "true")
+	cfg, err := Load(nil)
+	if err != nil || !cfg.TXEnabled {
+		t.Fatalf("env: %v (%v)", cfg.TXEnabled, err)
+	}
+	t.Setenv("WRAITH_TX_ENABLED", "sometimes")
+	if _, err := Load(nil); err == nil {
+		t.Fatal("bad env accepted")
+	}
+	os.Unsetenv("WRAITH_TX_ENABLED")
+	if cfg, err := Load([]string{"-tx"}); err != nil || !cfg.TXEnabled {
+		t.Fatalf("flag: %v (%v)", cfg.TXEnabled, err)
+	}
+	dir := t.TempDir()
+	f := filepath.Join(dir, "c.json")
+	os.WriteFile(f, []byte(`{"tx_enabled":true}`), 0o600)
+	if cfg, err := Load([]string{"-config", f}); err != nil || !cfg.TXEnabled {
+		t.Fatalf("file: %v (%v)", cfg.TXEnabled, err)
+	}
+}

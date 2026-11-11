@@ -364,3 +364,67 @@ func get[T any](ctx context.Context, db *sql.DB, q string, arg any,
 	}
 	return v, err
 }
+
+// Client is a row of the clients table: a station seen exchanging data with
+// an AP (protocol v3). It is a sighting, not guaranteed association state.
+type Client struct {
+	BSSID       string  `json:"bssid"`
+	Client      string  `json:"client"`
+	SSID        string  `json:"ssid"`
+	FirstSeen   int64   `json:"first_seen"`
+	LastSeen    int64   `json:"last_seen"`
+	Frames      int64   `json:"frames"`
+	LastRSSI    *int    `json:"last_rssi"`
+	LastChannel *int    `json:"last_channel"`
+	LastSensor  *string `json:"last_sensor"`
+}
+
+const clientCols = `c.bssid, c.client, IFNULL(a.ssid, ''), c.first_seen, c.last_seen, c.frames,
+	c.last_rssi, c.last_channel, c.last_sensor`
+
+func scanClient(sc interface{ Scan(...any) error }) (Client, error) {
+	var c Client
+	err := sc.Scan(&c.BSSID, &c.Client, &c.SSID, &c.FirstSeen, &c.LastSeen, &c.Frames,
+		&c.LastRSSI, &c.LastChannel, &c.LastSensor)
+	return c, err
+}
+
+// ListClients returns client sightings newest first, optionally for one BSSID.
+func (s *Store) ListClients(ctx context.Context, p Page, bssid string) ([]Client, int, error) {
+	where := ""
+	var args []any
+	if bssid != "" {
+		where = " WHERE c.bssid = ?"
+		args = append(args, bssid)
+	}
+	var total int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM clients c`+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT `+clientCols+` FROM clients c
+		LEFT JOIN access_points a ON a.bssid = c.bssid`+where+
+		` ORDER BY c.last_seen DESC, c.client LIMIT ? OFFSET ?`, append(args, p.Limit, p.Offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	out := []Client{}
+	for rows.Next() {
+		c, err := scanClient(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		out = append(out, c)
+	}
+	return out, total, rows.Err()
+}
+
+// GetClient returns one (BSSID, client) sighting row.
+func (s *Store) GetClient(ctx context.Context, bssid, client string) (Client, error) {
+	c, err := scanClient(s.db.QueryRowContext(ctx, `SELECT `+clientCols+` FROM clients c
+		LEFT JOIN access_points a ON a.bssid = c.bssid WHERE c.bssid = ? AND c.client = ?`, bssid, client))
+	if errors.Is(err, sql.ErrNoRows) {
+		return c, ErrNotFound
+	}
+	return c, err
+}

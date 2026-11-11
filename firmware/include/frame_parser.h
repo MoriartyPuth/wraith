@@ -50,3 +50,8 @@ typedef enum {
 
 /* Parse a management-frame MAC header. `len` must exclude the FCS. */
 fp_result_t frame_parse_mgmt(const uint8_t *frame, size_t len, wlan_hdr_t *out);
+
+/* Parse a data-frame MAC header (type 2). Only the header/addresses are
+ * needed for client discovery; body points at the (usually encrypted) payload.
+ * `len` must exclude the FCS. */
+fp_result_t frame_parse_data(const uint8_t *frame, size_t len, wlan_hdr_t *out);

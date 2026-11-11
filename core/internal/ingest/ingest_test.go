@@ -240,3 +240,46 @@ func TestFindingDedupAcrossRestart(t *testing.T) {
 		t.Fatal("dedup counter not incremented")
 	}
 }
+
+func TestClientSighting(t *testing.T) {
+	p, st, pub := setup(t)
+	ctx := context.Background()
+	const bssid = "64:13:AB:A5:53:E8"
+	const phone = "F6:C1:32:28:B8:85"
+	v3 := func(seq int, typ, extra, meta string) *events.Event {
+		raw := fmt.Sprintf(`{"version":3,"event_id":"cc001122-%d","source":"wraith-nano","sensor_id":"nano-70b2a8","event_type":"%s","timestamp":0,"seq":%d%s,"metadata":%s}`,
+			seq, typ, seq, extra, meta)
+		ev, err := events.Parse([]byte(raw))
+		if err != nil {
+			t.Fatalf("fixture invalid: %v\n%s", err, raw)
+		}
+		return ev
+	}
+	feed(t, p,
+		v3(0, "wifi.ap_observed", `,"channel":11,"bssid":"`+bssid+`"`,
+			`{"ssid":"Bo","ssid_hex":"426f","rssi":-60,"auth_mode":"wpa-wpa2-psk"}`),
+		v3(1, "wifi.client_observed", `,"channel":11,"bssid":"`+bssid+`"`,
+			`{"client":"`+phone+`","frames":12,"window_ms":10000,"rssi":-55}`),
+	)
+	c, err := st.GetClient(ctx, bssid, phone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Client != phone || c.Frames != 12 || c.SSID != "Bo" || c.LastRSSI == nil || *c.LastRSSI != -55 {
+		t.Fatalf("client: %+v", c)
+	}
+	if pub.msgs["client"] != 1 {
+		t.Fatalf("client stream messages: %v", pub.msgs)
+	}
+	// A later burst accumulates frames and keeps first_seen.
+	feed(t, p, v3(2, "wifi.client_observed", `,"channel":11,"bssid":"`+bssid+`"`,
+		`{"client":"`+phone+`","frames":5,"window_ms":10000}`))
+	c, _ = st.GetClient(ctx, bssid, phone)
+	if c.Frames != 17 {
+		t.Fatalf("frames accumulate: %+v", c)
+	}
+	cs, total, err := st.ListClients(ctx, storage.Page{Limit: 10}, bssid)
+	if err != nil || total != 1 || len(cs) != 1 || cs[0].Client != phone {
+		t.Fatalf("list clients: %v %d %v", err, total, cs)
+	}
+}

@@ -1,14 +1,19 @@
-# WRAITH Event Protocol — v1
+# WRAITH Event Protocol — v3
 
 Status: **IMPLEMENTED — TESTED** (Go validator + firmware serializer host tests).
 Not yet validated on ESP32 hardware.
 
 All WRAITH components exchange events as JSON objects. The machine-readable
-schema is `protocol/schemas/event.v1.schema.json`; canonical valid/invalid
+schema is `protocol/schemas/event.v3.schema.json`; canonical valid/invalid
 examples live in `protocol/fixtures/`. The Go validator
 (`core/internal/events`) is the reference implementation and is tested against
 those fixtures. The firmware serializer is checked against the Go validator by
 `scripts/check-protocol.sh`.
+
+v3 is **v2 plus one event type**: `wifi.client_observed` (station sightings
+from data frames). v2 was v1 plus `tx.ack`/`tx.report` (deauth test
+transmission, docs/tx.md). Core accepts v1, v2 and v3 envelopes; sensors built
+for older versions keep working.
 
 ## Framing (USB serial)
 
@@ -33,15 +38,15 @@ those fixtures. The firmware serializer is checked against the Go validator by
 
 | Field        | Type    | Required | Rules |
 |--------------|---------|----------|-------|
-| `version`    | integer | yes      | Must equal `1`. |
+| `version`    | integer | yes      | `1`, `2` or `3`. `tx.*` require v2; `wifi.client_observed` requires v3. |
 | `event_id`   | string  | yes      | 1–64 chars, `[A-Za-z0-9._:-]`. Unique per sensor. |
 | `source`     | string  | yes      | `wraith-nano`, `wraith-core`. (`tshark`/`kismet` were removed: WRAITH has no host capture.) |
 | `sensor_id`  | string  | yes      | 1–64 chars, `[A-Za-z0-9._:-]`. |
 | `event_type` | string  | yes      | One of the types below. |
 | `timestamp`  | integer | yes      | Unix seconds. `0` = sensor wall clock unknown (see below). |
 | `seq`        | integer | yes      | Per-boot monotonic counter, starts at 0, ≥ 0. |
-| `channel`    | integer | no       | 1–233. Nano only reports 1–14. |
-| `bssid`      | string  | no       | `AA:BB:CC:DD:EE:FF`, uppercase hex. |
+| `channel`    | integer | no       | 1–233. Nano only reports 1–14. Required for `tx.report` (the pinned transmit channel). |
+| `bssid`      | string  | no       | `AA:BB:CC:DD:EE:FF`, uppercase hex. Required for `tx.report`; optional for `tx.ack`. |
 | `metadata`   | object  | yes      | Type-specific; see below. `{}` if empty. |
 
 Unknown top-level fields are **rejected** (strict). Unknown metadata fields are
@@ -56,12 +61,26 @@ event and uses that for ordering when `timestamp` is `0`.
 
 ### Host → device
 
-The link is two-way but the sensor accepts no commands. Core writes the
-ASCII line `PING\n` every 2 s while it reads the port. Nano treats the host
-as connected while pings arrive (timeout 6 s; shown on the LCD) and, when a
-host (re)connects, sends a `sensor.status` within one heartbeat interval so
-a late-attaching Core learns state and capabilities immediately. All other
-input is ignored.
+The link is two-way. Core writes the ASCII line `PING\n` every 2 s while it
+reads the port. Nano treats the host as connected while pings arrive (timeout
+6 s; shown on the LCD) and, when a host (re)connects, sends a `sensor.status`
+within one heartbeat interval so a late-attaching Core learns state and
+capabilities immediately.
+
+All other input is ignored **unless** the firmware was built with
+`WRAITH_TX_ENABLED=1` (docs/tx.md), in which case these lines are accepted
+(and silently dropped otherwise):
+
+```
+TX_DEAUTH   <bssid> <client> <count> <interval_ms> <reason> <channel>
+TX_DISASSOC <bssid> <client> <count> <interval_ms> <reason> <channel>
+TX_STATUS
+```
+
+Lines are ≤ 96 chars, no tabs/newlines; invalid or out-of-limit commands are
+answered with a `rejected` `tx.ack` event rather than applied. The sensor's
+hard limits (≤ 10 frames, ≥ 100 ms spacing, 30 s cooldown, unicast client)
+re-validate every parameter; Core's checks exist to fail fast at the API.
 
 ## Event IDs, duplicates and reconnects
 
@@ -181,6 +200,47 @@ state      "unavailable" | "stopped" | "starting" | "running" | "error"
 message?   string ≤ 256
 ```
 
+### `wifi.client_observed` (v3 only)
+Emitted when a station is seen exchanging data with an AP at this BSSID.
+Requires `bssid` and `channel`. This is a **sighting**, not authoritative
+association state: the sensor only sees the channel it is tuned to, idle
+clients transmit nothing, and station MACs may be randomised.
+```
+client      MAC        station address from the 802.11 header
+frames      integer ≥ 1  data frames aggregated in this report
+window_ms   integer ≥ 1  aggregation window
+rssi?       integer -127–0
+```
+Direction is derived from the ToDS/FromDS bits (station→AP, AP→station, or
+IBSS); WDS frames, multicast destinations and frames where client == BSSID
+are ignored. The sensor reports a station's first sighting immediately, then
+aggregates further frames into ≥ 10 s windows.
+
+### `tx.ack` (v2 only)
+Sent by Nano in response to a `TX_*` command. Envelope `bssid` is optional
+(the command itself carries the target).
+```
+command     "deauth" | "disassoc" | "status"
+status      "accepted" | "rejected"
+detail?     string ≤ 128   why rejected (limits, disabled, malformed…)
+client?     MAC            echoed target client for accepted bursts
+```
+
+### `tx.report` (v2 only)
+Sent once per burst when it ends. Requires envelope `bssid` (the target)
+and `channel` (the channel the radio was pinned to).
+```
+command     "deauth" | "disassoc" | "status"
+client      MAC
+reason      integer 0–65535
+sent        integer ≥ 0    frames actually transmitted
+requested   integer ≥ 1    frames the burst asked for
+outcome     "complete" | "aborted_host_lost" | "aborted_radio"
+```
+`sent < requested` means the burst was cut short; `aborted_host_lost` fires
+when the USB link (PING) dropped mid-burst, `aborted_radio` when a transmit
+call failed. The burst aborts within one frame spacing of the trigger.
+
 ### RSN object
 ```
 version          integer
@@ -211,6 +271,7 @@ Core rejects invalid events with a reason (`unsupported_version`,
 | `hello` | `{"protocol": 1}` on connect |
 | `event` | stored event row (`id`, `event_id`, `event_type`, `payload`, …), after commit |
 | `access_point` | AP inventory row after an AP-related event |
+| `client` | client sighting row after a `wifi.client_observed` event (v3) |
 | `finding` | new detection finding |
 | `sensor` | sensor row after heartbeat/status/restart |
 | `provider` | capture provider status change |
@@ -223,4 +284,8 @@ re-fetch via REST. Browser `Origin` must be a loopback host (or listed in
 ## Versioning
 
 Additive changes to metadata require a version bump because validation is
-strict. Core will support multiple versions side by side when v2 exists.
+strict. v2 added the `tx.*` event types (2026-11-11) and v3 added
+`wifi.client_observed` (2026-11-12). Core supports v1–v3 side by side
+(`specsByVersion` in `core/internal/events`), and the live stream's `hello`
+message carries the Core's protocol version. Sensors report their protocol
+version implicitly through the events they send.

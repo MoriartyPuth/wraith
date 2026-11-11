@@ -2,7 +2,7 @@
 // prefix and every SSID/explanation is marked "Demo", so demo data can never
 // be mistaken for an observation. Deterministic (seeded PRNG).
 import type {
-  AccessPoint, Finding, Health, Observation, ProviderStatus, Sensor, Statistics, StoredEvent, SystemInfo,
+  AccessPoint, Client, Finding, Health, Observation, ProviderStatus, Sensor, Statistics, StoredEvent, SystemInfo,
 } from "../types/api";
 
 const T0 = Date.now();
@@ -38,6 +38,15 @@ export const aps: AccessPoint[] = SPECS.map((s, i) => ({
   ssid: s.ssid, ssid_hex: hex(s.ssid), first_seen: T0 - (3600 - i * 120) * 1000, last_seen: T0 - Math.floor(rnd() * 20000),
   last_channel: s.ch, last_rssi: s.rssi, auth_mode: s.auth, rsn: rsnFor(s.auth, s.pmf), pmf: s.pmf, last_sensor: SENSOR,
 }));
+
+export const clients: Client[] = [
+  { bssid: aps[0]!.bssid, client: "F6:C1:32:28:B8:85", ssid: aps[0]!.ssid, first_seen: T0 - 2_400_000,
+    last_seen: T0 - 12_000, frames: 48, last_rssi: (aps[0]!.last_rssi ?? -60) + 6, last_channel: aps[0]!.last_channel, last_sensor: SENSOR },
+  { bssid: aps[1]!.bssid, client: "32:B4:EC:04:82:C5", ssid: aps[1]!.ssid, first_seen: T0 - 1_800_000,
+    last_seen: T0 - 40_000, frames: 21, last_rssi: (aps[1]!.last_rssi ?? -70) + 4, last_channel: aps[1]!.last_channel, last_sensor: SENSOR },
+  { bssid: aps[2]!.bssid, client: "FC:B0:DE:86:8F:E3", ssid: aps[2]!.ssid, first_seen: T0 - 900_000,
+    last_seen: T0 - 120_000, frames: 7, last_rssi: (aps[2]!.last_rssi ?? -72) + 3, last_channel: aps[2]!.last_channel, last_sensor: SENSOR },
+];
 
 let id = 0;
 const ev = (type: string, at: number, metadata: object, bssid: string | null = null, channel: number | null = null): StoredEvent => {
@@ -100,7 +109,7 @@ export const sensor: Sensor & { connected: boolean } = {
 
 export const health: Health = { status: "ok", time: T0, checks: { database: "ok" } };
 export const info: SystemInfo = { name: "WRAITH Core", version: "0.1.0-demo", go_version: "—", os: "Demo mode", kernel: "—",
-  hostname: "demo", started_at: T0 - 3600000, uptime_seconds: 3600, schema_version: 2, protocol_version: 1 };
+  hostname: "demo", started_at: T0 - 3600000, uptime_seconds: 3600, schema_version: 2, protocol_version: 2, tx_enabled: false };
 export const providers: ProviderStatus[] = [{ name: "esp32-serial", state: "running", message: "Demo data (no device)",
   since: new Date(T0 - 3600000).toISOString(), implemented: true, stats: { lines: events.length, valid: events.length, rejected: 0 } }];
 

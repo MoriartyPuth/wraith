@@ -1,8 +1,8 @@
 // Centralized WRAITH Core API client. In demo mode every call is answered
 // from the labelled demo dataset instead of the network.
 import type {
-  AccessPoint, ApiErrorBody, EventQuery, Finding, Health, Observation, One, Paged, ProviderStatus, Sensor,
-  Statistics, StoredEvent, SystemInfo, WirelessInterface,
+  AccessPoint, ApiErrorBody, Client, EventQuery, Finding, Health, Observation, One, Paged, ProviderStatus, Sensor,
+  Statistics, StoredEvent, SystemInfo, TxAccepted, TxRequest, WirelessInterface,
 } from "../types/api";
 import { isDemo } from "./mode";
 import * as demo from "./demo";
@@ -94,6 +94,15 @@ export const api = {
     isDemo() ? resolve(paged(demoEvents(q), limit, offset))
       : get<Paged<StoredEvent>>(`/events?${page(limit, offset)}${eventQuery(q)}`, s),
 
+  clients: (bssid?: string, limit?: number, offset?: number, s?: AbortSignal) => {
+    if (isDemo()) {
+      const all = demo.clients.filter((c) => !bssid || c.bssid === bssid.toUpperCase());
+      return resolve(paged(all, limit, offset));
+    }
+    const filter = bssid ? `&bssid=${encodeURIComponent(bssid)}` : "";
+    return get<Paged<Client>>(`/clients?${page(limit, offset)}${filter}`, s);
+  },
+
   detections: (limit?: number, offset?: number, s?: AbortSignal) =>
     isDemo() ? resolve(paged(demo.findings, limit, offset)) : get<Paged<Finding>>(`/detections?${page(limit, offset)}`, s),
   setFindingStatus: (id: string, status: Finding["status"]) => {
@@ -106,6 +115,17 @@ export const api = {
     }
     return request<One<Finding>>(`/detections/${encodeURIComponent(id)}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }),
+    });
+  },
+
+  // Deauth test transmission (docs/tx.md). Only offered when Core exposes
+  // it (system info tx_enabled); demo mode answers 503 to keep the UI honest.
+  sendTx: (body: TxRequest) => {
+    if (isDemo()) {
+      return Promise.reject(new ApiError(503, "tx_disabled", "deauth test transmission is not available in demo mode"));
+    }
+    return request<One<TxAccepted>>("/tx", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
   },
 };

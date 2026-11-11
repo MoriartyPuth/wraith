@@ -40,6 +40,12 @@ rm -rf "$share/dashboard.new" && cp -r "$root/dashboard/dist" "$share/dashboard.
 rm -rf "$share/dashboard" && mv "$share/dashboard.new" "$share/dashboard"
 
 args="-serial $dev -dashboard-dir %h/.local/share/wraith/dashboard -log-format json"
+# Optional: expose the deauth test transmission API (docs/tx.md). Off unless
+# requested. Only for networks you are authorized to test.
+if [ "${WRAITH_TX_ENABLED:-0}" = "1" ]; then
+  args="$args -tx"
+  echo ">> deauth test transmission ENABLED (-tx); authorized networks only"
+fi
 # The user manager's groups are fixed at login. If dialout was granted after
 # that, start through sg (setuid, so NoNewPrivileges must stay off) until the
 # next login; re-run this script afterwards to switch to the hardened form.

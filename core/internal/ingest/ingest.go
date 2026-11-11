@@ -129,10 +129,11 @@ func (p *Pipeline) Handle(ctx context.Context, ev *events.Event) error {
 	}
 
 	var (
-		stored   storage.StoredEvent
-		ap       *storage.AccessPoint
-		findings []storage.Finding
-		dup      bool
+		stored    storage.StoredEvent
+		ap        *storage.AccessPoint
+		clientRow *storage.Client
+		findings  []storage.Finding
+		dup       bool
 	)
 	err := p.store.WithTx(ctx, func(tx *storage.Tx) error {
 		if err := tx.TouchSensor(ctx, ev.SensorID, ev.Source, nowMS); err != nil {
@@ -173,6 +174,20 @@ func (p *Pipeline) Handle(ctx context.Context, ev *events.Event) error {
 				}
 			} else {
 				ap = prev
+			}
+		}
+		if ev.Type == events.TypeWifiClientObserved {
+			var m events.ClientMeta
+			if err := ev.DecodeMeta(&m); err != nil {
+				return err
+			}
+			u := storage.ClientUpdate{BSSID: ev.BSSID, Client: m.Client, Seen: nowMS,
+				Frames: int64(m.Frames), RSSI: m.RSSI, Channel: ev.Channel, Sensor: ev.SensorID}
+			if err := tx.UpsertClient(ctx, u); err != nil {
+				return err
+			}
+			if c, err := tx.GetClient(ctx, ev.BSSID, m.Client); err == nil {
+				clientRow = &c
 			}
 		}
 		raw := p.det.Observe(&detection.Context{Event: ev, PrevAP: prev, CurAP: ap, Lookup: lookup{ctx, tx},
@@ -221,6 +236,9 @@ func (p *Pipeline) Handle(ctx context.Context, ev *events.Event) error {
 	p.publish(stream.KindEvent, stored)
 	if ap != nil {
 		p.publish(stream.KindAP, ap)
+	}
+	if clientRow != nil {
+		p.publish(stream.KindClient, clientRow)
 	}
 	for _, f := range findings {
 		p.log.Info("finding", "id", f.ID, "category", f.Category, "severity", f.Severity, "class", f.Classification, "bssid", deref(f.BSSID))

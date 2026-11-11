@@ -32,6 +32,13 @@ type Config struct {
 	EventRetentionDays int `json:"event_retention_days"`
 	// PruneIntervalMinutes is how often the pruner runs. 0 uses the default.
 	PruneIntervalMinutes int `json:"prune_interval_minutes"`
+
+	// TXEnabled exposes POST /api/v1/tx, which forwards deauth/disassoc test
+	// requests (docs/tx.md) to a sensor built with WRAITH_TX_ENABLED=1. Off by
+	// default; only enable it if you are authorized to test the networks the
+	// sensor observes. The sensor-side limits (frame cap, spacing, cooldown)
+	// always apply regardless of this flag.
+	TXEnabled bool `json:"tx_enabled"`
 }
 
 // Default returns the built-in defaults.
@@ -67,6 +74,7 @@ func Load(args []string) (Config, error) {
 	format := fs.String("log-format", "", "log format: text|json")
 	dash := fs.String("dashboard-dir", "", "serve a built dashboard from this directory")
 	retain := fs.Int("retention-days", -1, "delete events older than N days (0 = keep forever)")
+	tx := fs.Bool("tx", false, "enable the deauth test transmission API (authorized networks only; see docs/tx.md)")
 	if err := fs.Parse(args); err != nil {
 		return cfg, err
 	}
@@ -103,6 +111,13 @@ func Load(args []string) (Config, error) {
 		}
 		cfg.EventRetentionDays = n
 	}
+	if v := os.Getenv("WRAITH_TX_ENABLED"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return cfg, fmt.Errorf("WRAITH_TX_ENABLED: %w", err)
+		}
+		cfg.TXEnabled = b
+	}
 
 	set := func(dst *string, v string) {
 		if v != "" {
@@ -120,6 +135,9 @@ func Load(args []string) (Config, error) {
 	}
 	if *retain >= 0 {
 		cfg.EventRetentionDays = *retain
+	}
+	if *tx {
+		cfg.TXEnabled = true
 	}
 	return cfg, cfg.Validate()
 }

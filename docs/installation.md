@@ -21,7 +21,6 @@ cd core && go run ./cmd/wraith -serial /dev/ttyUSB0
 #   watch the live stream:  go run ./cmd/wraith tail
 #   flags: -serial /dev/ttyUSB0  -db PATH  -listen ADDR  -dashboard-dir DIR
 #   env:   WRAITH_SERIAL, WRAITH_DB, WRAITH_LISTEN, WRAITH_DASHBOARD_DIR, ...
-
 # Dashboard (dev, proxies /api to Core)
 cd dashboard && npm install && npm run dev     # http://127.0.0.1:5173
 
@@ -37,8 +36,8 @@ cd firmware && pio run && pio run -t upload && pio device monitor
 
 ```bash
 scripts/install-user-service.sh            # build, install, enable, start
+WRAITH_TX_ENABLED=1 scripts/install-user-service.sh   # same, with -tx (docs/tx.md)
 scripts/install-user-service.sh --uninstall
-journalctl --user -u wraith-core -f        # logs (JSON)
 ```
 
 Installs `~/.local/bin/wraith`, the dashboard in
@@ -65,6 +64,24 @@ WRAITH_RETENTION_DAYS=3 wraith     # same via environment
 In a JSON config file: `"event_retention_days": 7, "prune_interval_minutes": 60`.
 Pruned counts appear in `/api/v1/statistics` under `runtime`
 (`pruned_events`, `pruned_observations`).
+
+## Deauth test transmission (optional)
+
+Off by default. Enabling it exposes `POST /api/v1/tx`, which asks a sensor
+built with `WRAITH_TX_ENABLED=1` to send a short, rate-limited deauth/disassoc
+burst (authorized networks only — see [docs/tx.md](tx.md)).
+
+```bash
+wraith -tx                         # expose the API
+WRAITH_TX_ENABLED=1 wraith         # same via environment
+```
+
+In a JSON config file: `"tx_enabled": true`. Both ends must opt in: the
+firmware is built with `cd firmware && pio run -e tx -t upload`, and Core runs
+with `-tx`. `/api/v1/system/info` reports `"tx_enabled"`, and the dashboard
+shows the test card on an AP page only when both are true and a sensor is
+connected. The feature is **not yet hardware-validated** (docs/tx.md,
+docs/hardware.md).
 
 `scripts/esp32-switch.sh` stops the service while it uses the port and
 restarts it afterwards; flash with `pio run -t upload` only after

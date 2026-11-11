@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"github.com/MoriartyPuth/wraith/core/internal/events"
 )
 
 const (
@@ -32,6 +34,7 @@ const (
 	KindAP       = "access_point"
 	KindFinding  = "finding"
 	KindSensor   = "sensor"
+	KindClient   = "client"
 	KindProvider = "provider"
 	KindHello    = "hello"
 )
@@ -144,7 +147,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.clients[c] = struct{}{}
 	h.mu.Unlock()
 
-	hello, _ := json.Marshal(Message{Type: KindHello, Time: time.Now().UnixMilli(), Data: map[string]any{"protocol": 1}})
+	hello, _ := json.Marshal(Message{Type: KindHello, Time: time.Now().UnixMilli(), Data: map[string]any{"protocol": events.ProtocolVersion}})
 	c.send <- hello
 	go h.writePump(c)
 	h.readPump(c)

@@ -14,7 +14,29 @@ export interface Health {
 export interface SystemInfo {
   name: string; version: string; go_version: string; os: string; kernel: string;
   hostname: string; started_at: number; uptime_seconds: number;
-  schema_version: number; protocol_version: number;
+  schema_version: number; protocol_version: number; tx_enabled: boolean;
+}
+
+// Deauth test transmission (docs/tx.md): POST /api/v1/tx.
+export interface TxRequest {
+  kind: "deauth" | "disassoc";
+  bssid: string;
+  client: string;
+  reason?: number;
+  count?: number;
+  interval_ms?: number;
+  confirm: boolean;
+}
+
+export interface TxAccepted {
+  kind: string;
+  bssid: string;
+  client: string;
+  reason: number;
+  count: number;
+  interval_ms: number;
+  channel: number;
+  note: string;
 }
 
 export type ProviderState = "unavailable" | "stopped" | "starting" | "running" | "degraded" | "error";
@@ -43,6 +65,14 @@ export interface AccessPoint {
   rsn: unknown; pmf: PMF; last_sensor: string | null;
 }
 
+// A station seen exchanging data with an AP (protocol v3). A sighting, not
+// guaranteed association state.
+export interface Client {
+  bssid: string; client: string; ssid: string;
+  first_seen: number; last_seen: number; frames: number;
+  last_rssi: number | null; last_channel: number | null; last_sensor: string | null;
+}
+
 export interface StoredEvent {
   id: number; event_id: string; sensor_id: string; source: string; event_type: string;
   bssid: string | null; channel: number | null; sensor_ts: number; received_at: number;
@@ -66,7 +96,7 @@ export interface Statistics {
 
 /** Live stream envelope from /api/v1/ws. */
 export interface StreamMessage {
-  type: "hello" | "event" | "access_point" | "finding" | "sensor" | "provider";
+  type: "hello" | "event" | "access_point" | "client" | "finding" | "sensor" | "provider";
   time: number;
   data: unknown;
 }

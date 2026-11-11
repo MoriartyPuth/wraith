@@ -6,6 +6,7 @@ package capture
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -63,6 +64,15 @@ type CaptureProvider interface {
 	Status() ProviderStatus
 }
 
+// Commander is implemented by providers that can forward host→device
+// command lines over their link. WRAITH Core's only use is the rate-limited
+// deauth test transmission path (docs/tx.md).
+type Commander interface {
+	// SendCommand writes one complete command line (no trailing newline is
+	// needed; implementations add it). The call must be safe for concurrent use.
+	SendCommand(line string) error
+}
+
 // Manager owns the registered providers.
 type Manager struct {
 	mu        sync.RWMutex
@@ -104,6 +114,30 @@ func (m *Manager) StopAll() {
 	for _, p := range m.providers {
 		_ = p.Stop()
 	}
+}
+
+// SendCommand forwards a command line to the first provider implementing
+// Commander (the ESP32 serial provider). It fails when no such provider
+// exists or the write fails; link state is checked by the caller.
+func (m *Manager) SendCommand(line string) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var errs []error
+	for _, p := range m.providers {
+		c, ok := p.(Commander)
+		if !ok {
+			continue
+		}
+		if err := c.SendCommand(line); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", p.Name(), err))
+		} else {
+			return nil
+		}
+	}
+	if errs == nil {
+		return errors.New("no provider accepts commands")
+	}
+	return errors.Join(errs...)
 }
 
 // Stub is a provider whose capture path is not implemented yet but whose

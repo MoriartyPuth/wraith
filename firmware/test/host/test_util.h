@@ -12,3 +12,7 @@ extern int failures;
 
 void run_wifi_tests(void);
 void emit_wifi_samples(void);
+void run_tx_tests(void);
+void emit_tx_samples(void);
+void run_client_tests(void);
+void emit_client_samples(void);

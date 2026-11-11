@@ -228,3 +228,43 @@ func (t *Tx) FindingExistsSince(ctx context.Context, category, bssid string, sin
 		category, bssid, since).Scan(&n)
 	return n > 0, err
 }
+
+// ClientUpdate merges one aggregated station sighting into the clients table.
+type ClientUpdate struct {
+	BSSID   string
+	Client  string
+	Seen    int64
+	Frames  int64
+	RSSI    *int
+	Channel *int
+	Sensor  string
+}
+
+// UpsertClient records a client sighting. first_seen is preserved; frames
+// accumulate; rssi/channel keep their last non-nil value.
+func (t *Tx) UpsertClient(ctx context.Context, u ClientUpdate) error {
+	if u.Frames < 1 {
+		u.Frames = 1
+	}
+	_, err := t.tx.ExecContext(ctx, `INSERT INTO clients
+		(bssid, client, first_seen, last_seen, frames, last_rssi, last_channel, last_sensor)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(bssid, client) DO UPDATE SET
+			last_seen = excluded.last_seen,
+			frames = clients.frames + excluded.frames,
+			last_rssi = COALESCE(excluded.last_rssi, clients.last_rssi),
+			last_channel = COALESCE(excluded.last_channel, clients.last_channel),
+			last_sensor = excluded.last_sensor`,
+		u.BSSID, u.Client, u.Seen, u.Seen, u.Frames, u.RSSI, u.Channel, u.Sensor)
+	return err
+}
+
+// GetClient returns one sighting row inside the transaction.
+func (t *Tx) GetClient(ctx context.Context, bssid, client string) (Client, error) {
+	c, err := scanClient(t.tx.QueryRowContext(ctx, `SELECT `+clientCols+` FROM clients c
+		LEFT JOIN access_points a ON a.bssid = c.bssid WHERE c.bssid = ? AND c.client = ?`, bssid, client))
+	if errors.Is(err, sql.ErrNoRows) {
+		return c, ErrNotFound
+	}
+	return c, err
+}

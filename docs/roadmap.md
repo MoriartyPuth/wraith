@@ -109,3 +109,37 @@ client (e.g. disconnect a phone from your own 2.4 GHz network).
 - [~] False-positive review on a day of real traffic (soak running; rogue-AP warm-up added to cut startup FPs)
 - [x] Data retention / pruning policy (events + cascaded observations; `-retention-days`, default 7)
 - [ ] Documentation review
+
+## Phase 7 — Deauth test transmission (2026-11-11)
+
+Authorized-testing-only active feature, fully gated. See docs/tx.md.
+
+| Item | Status |
+|------|--------|
+| Protocol v2 (`tx.ack`, `tx.report`) — schema, fixtures, Go validator | IMPLEMENTED — TESTED (host) |
+| Firmware TX engine: frame builder, command parser, limits, burst state machine, host-lost/radio aborts | IMPLEMENTED — TESTED (host, ASan/UBSan) |
+| Firmware wiring: host_link parsing, radio ops + proc-task tick in wifi_monitor, capability `deauth-tx` | IMPLEMENTED — TESTED (host) |
+| Firmware build gate `WRAITH_TX_ENABLED` (default off) + `pio -e tx` env | IMPLEMENTED |
+| Core: `tx_enabled` config (`-tx`, env), `capture.Commander`, serial `SendCommand` | IMPLEMENTED — TESTED |
+| Core: `POST /api/v1/tx` (confirm, limits, observed-BSSID + 2.4 GHz channel, 403/400/409/502) | IMPLEMENTED — TESTED |
+| Core: `tx_enabled` in `/system/info`; protocol version 2 | IMPLEMENTED — TESTED |
+| Dashboard: APDetail TX card (authorization note, confirm checkbox), Settings status, `tx.*` history filters | IMPLEMENTED — typecheck + build pass |
+| Docs: docs/tx.md + scope updates | IMPLEMENTED |
+| Hardware validation of `esp_wifi_80211_tx` bursts, real `tx.ack`/`tx.report` on the wire | TESTED 2026-11-12: 5-frame deauth burst to an owned client reported `sent=5/requested=5 complete`, observable ~2 s disconnect; sensor did not echo its own TX |
+| Driver requirements found on hardware: unconfigured STA mode + raw-frame sanity-check override (`tx_raw_override.c`) | IMPLEMENTED — TESTED |
+
+## Phase 8 — Client visibility (2026-11-12)
+
+Stations (phones/laptops) seen exchanging data with each AP. See
+docs/protocol.md (`wifi.client_observed`) and docs/hardware.md.
+
+| Item | Status |
+|------|--------|
+| Firmware: data-frame capture (mgmt+data filter), header parser, client tracker (direction, aggregation, first-sight) | IMPLEMENTED — TESTED (host, ASan/UBSan) + hardware |
+| Firmware: protocol v3, `wifi.client_observed` builder, `clients=` in status stats | IMPLEMENTED — TESTED |
+| Protocol v3 schema + fixtures; Core validator accepts v1–v3 | IMPLEMENTED — TESTED |
+| Core: `clients` table + migration, upsert/query/prune | IMPLEMENTED — TESTED |
+| Core: ingest upsert + live `client` stream event | IMPLEMENTED — TESTED |
+| Core API: `GET /clients`, `GET /access-points/{bssid}/clients` | IMPLEMENTED — TESTED |
+| Dashboard: Clients page, per-AP clients panel, deauth client picker, live refresh | IMPLEMENTED — typecheck + build pass |
+| Hardware: confirm phones/laptops appear with real MACs on the lab AP | TESTED 2026-11-12 (data-frame headers on channel) |

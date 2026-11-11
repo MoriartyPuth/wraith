@@ -19,6 +19,11 @@ const (
 	ReasonOversize         = "oversize"
 )
 
+// SupportedVersions are the envelope versions this build accepts: v1 (AP and
+// management observation), v2 (+ tx.ack/tx.report, docs/tx.md) and v3
+// (+ wifi.client_observed, station sightings). Older sensors keep working.
+var SupportedVersions = map[int64]bool{1: true, 2: true, 3: true}
+
 // ValidationError explains why an event was rejected.
 type ValidationError struct {
 	Reason string
@@ -156,6 +161,55 @@ var mgmtFields = []field{
 	{name: "protected", k: kBool},
 }
 
+// txSpecs are the v2 additions: responses of the deauth test transmission
+// (docs/tx.md). A v1 sensor can never produce them.
+var txSpecs = map[string]typeSpec{
+	TypeTxAck: {meta: []field{
+		{name: "command", k: kEnum, req: true, enum: []string{"deauth", "disassoc", "status"}},
+		{name: "status", k: kEnum, req: true, enum: []string{"accepted", "rejected"}},
+		{name: "detail", k: kStr, maxLen: 128},
+		{name: "client", k: kMAC},
+	}},
+	TypeTxReport: {needBSSID: true, meta: []field{
+		{name: "command", k: kEnum, req: true, enum: []string{"deauth", "disassoc"}},
+		{name: "client", k: kMAC, req: true},
+		intF("reason", true, 0, 65535),
+		intF("sent", true, 0, 65535),
+		intF("requested", true, 0, 65535),
+		{name: "outcome", k: kEnum, req: true,
+			enum: []string{"complete", "aborted_host_lost", "aborted_radio"}},
+	}},
+}
+
+// clientSpecs are the v3 additions: data-frame station sightings.
+var clientSpecs = map[string]typeSpec{
+	TypeWifiClientObserved: {needBSSID: true, needChannel: true, meta: []field{
+		{name: "client", k: kMAC, req: true},
+		intF("frames", true, 1, maxInt),
+		intF("window_ms", true, 1, maxInt),
+		intF("rssi", false, -127, 0),
+	}},
+}
+
+// specsByVersion: v2 is v1 plus the tx event types; v3 adds client sightings.
+var specsByVersion = func() map[int64]map[string]typeSpec {
+	v2 := make(map[string]typeSpec, len(specs)+len(txSpecs))
+	for k, v := range specs {
+		v2[k] = v
+	}
+	for k, v := range txSpecs {
+		v2[k] = v
+	}
+	v3 := make(map[string]typeSpec, len(v2)+len(clientSpecs))
+	for k, v := range v2 {
+		v3[k] = v
+	}
+	for k, v := range clientSpecs {
+		v3[k] = v
+	}
+	return map[int64]map[string]typeSpec{1: specs, 2: v2, 3: v3}
+}()
+
 var envelopeFields = []field{
 	intF("version", true, 0, maxInt), // exact version checked separately
 	{name: "event_id", k: kIdent, req: true},
@@ -193,11 +247,12 @@ func Parse(raw []byte) (*Event, error) {
 	if err := checkObject(top, envelopeFields, ""); err != nil {
 		return nil, err
 	}
-	if v, _ := top["version"].(json.Number).Int64(); v != ProtocolVersion {
-		return nil, verr(ReasonUnsupportedVer, "version", "got %d, want %d", v, ProtocolVersion)
+	ver, _ := top["version"].(json.Number).Int64()
+	if !SupportedVersions[ver] {
+		return nil, verr(ReasonUnsupportedVer, "version", "got %d, want one of 1, %d", ver, ProtocolVersion)
 	}
 	et := top["event_type"].(string)
-	spec, ok := specs[et]
+	spec, ok := specsByVersion[ver][et]
 	if !ok {
 		return nil, verr(ReasonUnknownEventType, "event_type", "%q", et)
 	}

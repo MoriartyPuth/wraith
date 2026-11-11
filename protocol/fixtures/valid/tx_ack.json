@@ -1,0 +1,1 @@
+{"version":2,"event_id":"c0ffee01-42","source":"wraith-nano","sensor_id":"nano-70b2a8","event_type":"tx.ack","timestamp":0,"seq":42,"bssid":"AA:BB:CC:DD:EE:01","metadata":{"command":"deauth","status":"accepted","client":"11:22:33:44:55:66"}}

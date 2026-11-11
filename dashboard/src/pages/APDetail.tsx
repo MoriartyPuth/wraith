@@ -5,6 +5,7 @@ import { useLiveRefresh } from "../services/live";
 import { Async, Badge, Empty, Panel, PageHeader, Table, td } from "../components/ui";
 import { RssiChart } from "../components/LazyCharts";
 import { AuthBadge, PmfBadge, SeverityBadge } from "../components/badges";
+import { TxCard } from "../components/TxCard";
 import type { RSNInfo } from "../types/api";
 import { describeEvent } from "../utils/describe";
 import { timeAgo } from "../utils/format";
@@ -19,8 +20,10 @@ export default function APDetail() {
   const obs = useApi((s) => api.observations(bssid, 500, s), 30000, [bssid]);
   const evs = useApi((s) => api.events({ bssid }, 30, 0, s), 30000, [bssid]);
   const fs = useApi((s) => api.detections(500, 0, s), 60000);
+  const clients = useApi((s) => api.clients(bssid, 200, 0, s), 30000, [bssid]);
   useLiveRefresh(["access_point"], ap.reload, 3000);
   useLiveRefresh(["access_point"], obs.reload, 10000);
+  useLiveRefresh(["client"], clients.reload, 5000);
   const related = (fs.data?.data ?? []).filter((f) => f.bssid === bssid);
   const ssid = ap.data?.data.ssid;
 
@@ -72,6 +75,28 @@ export default function APDetail() {
               ))}
             </ul>
           )}
+        </Panel>
+        <TxCard bssid={bssid} lastChannel={ap.data?.data.last_channel ?? null}
+          clients={clients.data?.data ?? []} />
+        <Panel title="Clients seen on this AP" className="lg:col-span-3"
+          action={<Link to={`/clients?bssid=${encodeURIComponent(bssid)}`} className="text-xs text-ink-3 hover:text-accent">All clients →</Link>}>
+          <Async state={clients} isEmpty={(d) => d.data.length === 0}
+            empty="No data frames from clients have been observed on this AP yet.">
+            {(d) => (
+              <Table head={["Client", "Ch", "Last RSSI", "Frames", "First seen", "Last seen"]}>
+                {d.data.map((c) => (
+                  <tr key={c.client}>
+                    <td className={`${td} font-mono text-xs whitespace-nowrap`}>{c.client}</td>
+                    <td className={`${td} tabular-nums`}>{c.last_channel ?? "—"}</td>
+                    <td className={`${td} tabular-nums`}>{c.last_rssi ?? "—"}</td>
+                    <td className={`${td} tabular-nums`}>{c.frames}</td>
+                    <td className={`${td} whitespace-nowrap`}>{timeAgo(c.first_seen)}</td>
+                    <td className={`${td} whitespace-nowrap`}>{timeAgo(c.last_seen)}</td>
+                  </tr>
+                ))}
+              </Table>
+            )}
+          </Async>
         </Panel>
         <Panel title="Recent events" className="lg:col-span-3"
           action={<Link to={`/history?bssid=${encodeURIComponent(bssid)}`} className="text-xs text-ink-3 hover:text-accent">Full history →</Link>}>

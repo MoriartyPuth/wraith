@@ -112,19 +112,35 @@ soak is still worthwhile before calling Phase 6 complete.
 
 ## Deauthentication burst detection
 
-The burst path is validated end to end by `TestDeauthBurstEndToEndOverSerial`
-(core/internal/ingest): a realistic burst of `wifi.deauth_observed` lines,
-framed and checksummed exactly as the firmware emits them, is fed through a
-pseudo-terminal into the real serial reader → framing/CRC → parse → ingest →
-detection → stored finding. This exercises every link except the ESP32 radio
-physically receiving a high volume of frames.
+The *detection* burst path is validated end to end by
+`TestDeauthBurstEndToEndOverSerial` (core/internal/ingest): a realistic burst
+of `wifi.deauth_observed` lines, framed and checksummed exactly as the
+firmware emits them, is fed through a pseudo-terminal into the real serial
+reader → framing/CRC → parse → ingest → detection → stored finding. This
+exercises every link except the ESP32 radio physically receiving a high
+volume of frames.
 
-WRAITH never transmits deauthentication frames, so a burst is never generated
-against any network for testing. The remaining hardware-only link — the radio
-hearing many such frames — shares the exact receive path already proven for a
-single deauth frame (`frame_parser` hardware test) and the on-device
-aggregation (`management_monitor` host test). To observe a genuine burst,
-watch WRAITH during an authorized test on a network and devices you own.
+By default WRAITH never transmits anything, so a burst is never generated
+against any network for testing. The optional deauth *test* transmission
+(docs/tx.md) has its own host coverage: `firmware/test/host/test_tx.c` (frame
+builder, command parsing, limits, burst lifecycle, host-lost/radio aborts,
+gated build) and the Core API tests (`core/internal/api/tx_test.go`: every
+gate and error path, with a fake `Commander` provider). Flashing the `pio -e
+tx` build and validating `esp_wifi_80211_tx` behaviour on hardware is
+explicitly a Phase 7 open item.
+
+## Client sightings (protocol v3)
+
+`firmware/test/host/test_client.c` covers the data-header parser (QoS/HT
+lengths, non-data, bad version), direction mapping (station→AP, AP→station,
+IBSS), rejection of WDS/multicast/zero/client==BSSID, first-sight emission and
+windowed aggregation. Core coverage: validator fixtures
+(`protocol/fixtures/*client_*`), `TestClientSighting` (ingest upsert,
+accumulation, SSID join, live stream), and `TestClientsEndpoints` (list, per-AP,
+encoded path, filters). `check-protocol.sh` validates firmware-emitted
+`wifi.client_observed` samples against the Go validator. Hardware: the ESP32
+captures data-frame headers when tuned to the AP's channel (best-effort; see
+docs/hardware.md).
 
 ## Retention
 
@@ -144,4 +160,6 @@ initial backlog sweep, and the keep-forever (retention 0) case.
 
 Use only access points and clients you own. Deauthentication frames for
 detector validation should come from your own AP's normal behavior (reboot,
-client kick via its admin UI, roaming) — WRAITH does not generate them.
+client kick via its admin UI, roaming) — by default WRAITH does not generate
+them. The gated TX build (`pio -e tx`, docs/tx.md) exists for authorized
+test bursts and must never be used on third-party networks.

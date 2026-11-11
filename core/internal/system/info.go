@@ -22,6 +22,9 @@ type Info struct {
 	UptimeSeconds int64  `json:"uptime_seconds"`
 	SchemaVersion int    `json:"schema_version"`
 	ProtocolVer   int    `json:"protocol_version"`
+	// TXEnabled mirrors the Core configuration: whether the deauth test
+	// transmission API is exposed (set by the api handler, not Collect).
+	TXEnabled bool `json:"tx_enabled"`
 }
 
 // Collect gathers static host information.

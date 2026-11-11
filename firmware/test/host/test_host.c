@@ -196,6 +196,8 @@ static int emit(void)
     n = proto_end(&jw);
     fputs(n ? buf : "OVERFLOW\n", stdout);
     emit_wifi_samples();
+    emit_tx_samples();
+    emit_client_samples();
     return 0;
 }
 
@@ -213,6 +215,8 @@ int main(int argc, char **argv)
     test_lcd_screens();
     test_frame_parser();
     run_wifi_tests();
+    run_tx_tests();
+    run_client_tests();
     if (failures) {
         fprintf(stderr, "%d check(s) failed\n", failures);
         return 1;

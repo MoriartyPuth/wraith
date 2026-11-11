@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -76,6 +77,7 @@ type Provider struct {
 	file   *os.File
 
 	lines, valid, nonProtocol, oversize, rejected, partial, reconnects, crcFailed, replayed, pings, stalls atomic.Uint64
+	commands                                                                                               atomic.Uint64
 }
 
 // New returns the provider; an empty port yields an "unavailable" stub.
@@ -112,9 +114,35 @@ func (p *Provider) Status() capture.ProviderStatus {
 		"lines": p.lines.Load(), "valid": p.valid.Load(), "rejected": p.rejected.Load(),
 		"non_protocol": p.nonProtocol.Load(), "oversize": p.oversize.Load(),
 		"partial_at_disconnect": p.partial.Load(), "reconnects": p.reconnects.Load(),
-		"checksum_failed": p.crcFailed.Load(), "replayed_on_open": p.replayed.Load(), "pings_sent": p.pings.Load(), "stall_reopens": p.stalls.Load(),
+		"checksum_failed": p.crcFailed.Load(), "replayed_on_open": p.replayed.Load(),
+		"pings_sent": p.pings.Load(), "stall_reopens": p.stalls.Load(), "commands_sent": p.commands.Load(),
 	}
 	return st
+}
+
+// SendCommand writes one host→device command line (capture.Commander).
+// Single-line ASCII, no control characters; the trailing newline is added
+// here. Safe for concurrent use (the ping writer and hot-plug reconnects
+// close/replace the file, so the handle is taken under the status lock).
+func (p *Provider) SendCommand(line string) error {
+	if len(line) == 0 || len(line) > 96 || strings.ContainsAny(line, "\n\r\t\x00") {
+		return errors.New("invalid command line")
+	}
+	p.mu.Lock()
+	f := p.file
+	p.mu.Unlock()
+	if f == nil {
+		return fmt.Errorf("%s is not connected", p.opt.Port)
+	}
+	n, err := f.Write([]byte(line + "\n"))
+	if err != nil {
+		return fmt.Errorf("write %s: %w", p.opt.Port, err)
+	}
+	if n != len(line)+1 {
+		return fmt.Errorf("write %s: short write (%d/%d bytes)", p.opt.Port, n, len(line)+1)
+	}
+	p.commands.Add(1)
+	return nil
 }
 
 func (p *Provider) setState(s capture.State, msg string) {

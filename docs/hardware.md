@@ -43,6 +43,43 @@ Limits that apply to any original ESP32: 2.4 GHz only (no 5/6 GHz), one channel
 at a time, promiscuous capture is best-effort (frames are missed, especially
 under load or while hopping), no decryption of protected payloads.
 
+### Client (station) discovery
+
+The promiscuous filter includes **data** frames. WRAITH reads only the 24-byte
+MAC header of each data frame — never the encrypted payload — to learn which
+station (`addr1`/`addr2`, per the ToDS/FromDS bits) is exchanging traffic with
+which BSSID. Coverage is inherently best-effort:
+
+- the radio hears one channel at a time (~250 ms per hop over 13 channels), so
+  a client is only observed while its AP's channel is tuned;
+- idle clients send no data frames and are invisible; an "associated clients"
+  list cannot be produced from the air in general;
+- phones and modern OSes randomise MAC addresses per network, so the same
+  device can appear as several MACs over time.
+
+The sensor does not decrypt payloads and does not track association state; a
+`wifi.client_observed` event means "seen exchanging data", not "connected now".
+
+### Deauth test transmission (optional, gated)
+
+The `pio -e tx` build adds a rate-limited deauth/disassoc transmit path
+(docs/tx.md). It uses `esp_wifi_80211_tx()` with the interface in
+**unconfigured STA mode** (no station config, promiscuous on) on the channel
+Core supplies; the driver appends the FCS, so the firmware frame is 26 bytes.
+Stock ESP-IDF refuses deauth/disassoc frames from this API, so the TX build
+links `tx_raw_override.c` to allow them (see docs/tx.md).
+
+**Validated on hardware 2026-11-12**: a 5-frame deauth burst at 150 ms
+spacing to an owned phone on the lab AP produced `tx.report
+sent=5/requested=5 complete` and an observable disconnect (~2 s of packet
+loss, then automatic reassociation). The sensor did **not** hear its own
+transmissions, so a single sensor does not feed its burst back into its own
+capture. Independent on-air capture with a second receiver remains optional.
+
+This feature is off unless the firmware is built with `WRAITH_TX_ENABLED=1`
+**and** Core runs with `-tx`. Use it only on networks you are authorized to
+test.
+
 ### Serial link: adapter replay bursts (observed 2026-11-11)
 
 After the port has been closed for a while, opening it yields a burst of

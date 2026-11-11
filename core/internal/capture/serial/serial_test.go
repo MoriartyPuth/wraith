@@ -290,3 +290,58 @@ func TestStalledReadReopens(t *testing.T) {
 		t.Fatalf("after reopen: %+v", ev)
 	}
 }
+
+func TestSendCommand(t *testing.T) {
+	master, slave := newPTY(t)
+	defer master.Close()
+	p := New(Options{Port: slave}).(*Provider)
+	if err := p.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer p.Stop()
+	waitState(t, p, capture.StateRunning)
+
+	// Drain the ping first.
+	master.SetReadDeadline(time.Now().Add(3 * time.Second))
+	buf := make([]byte, 256)
+	if n, err := master.Read(buf); err == nil && strings.Contains(string(buf[:n]), "PING\n") {
+		// ignore; the TX line arrives in a later read
+	}
+	line := "TX_DEAUTH AA:BB:CC:DD:EE:01 11:22:33:44:55:66 1 100 7 6"
+	if err := p.SendCommand(line); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		master.SetReadDeadline(time.Now().Add(3 * time.Second))
+		n, err := master.Read(buf)
+		if err != nil {
+			t.Fatalf("timeout reading command back: %v", err)
+		}
+		if strings.Contains(string(buf[:n]), line+"\n") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("command not echoed: %q", string(buf[:n]))
+		}
+	}
+	if p.Status().Stats["commands_sent"] != 1 {
+		t.Fatalf("commands_sent: %v", p.Status().Stats)
+	}
+
+	// Malformed lines are rejected without touching the port.
+	for _, bad := range []string{"", "no\nnewline", "tab\there", strings.Repeat("x", 97)} {
+		if err := p.SendCommand(bad); err == nil {
+			t.Fatalf("accepted %q", bad)
+		}
+	}
+}
+
+func TestSendCommandNotConnected(t *testing.T) {
+	p := New(Options{Port: "/dev/wraith-nonexistent", MinRetry: time.Second}).(*Provider)
+	p.Start(context.Background())
+	defer p.Stop()
+	if err := p.SendCommand("PING_CHECK"); err == nil {
+		t.Fatal("send to disconnected port must fail")
+	}
+}

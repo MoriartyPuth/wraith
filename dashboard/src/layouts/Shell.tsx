@@ -10,6 +10,7 @@ export const NAV = [
   { to: "/", label: "Overview" },
   { to: "/monitor", label: "Wireless Monitor" },
   { to: "/access-points", label: "Access Points" },
+  { to: "/clients", label: "Clients" },
   { to: "/events", label: "Security Events" },
   { to: "/detections", label: "Detection Center" },
   { to: "/pmf", label: "PMF Inspector" },
