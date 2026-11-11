@@ -13,17 +13,23 @@ const rogueLimitations = "Many legitimate setups advertise one SSID from several
 	"repeaters, dual-band routers) and some mix security modes deliberately (guest, legacy-compatibility or transition " +
 	"networks). This is an indicator to investigate, not proof of an evil twin."
 
+// RogueWarmup is how long after Core starts the rogue detector waits before
+// evaluating any AP, so the sibling inventory has filled from beacon reports
+// (which carry auth mode) and the 60 s identity refresh.
+const RogueWarmup = 90 * time.Second
+
 // rogueAPDetector flags a BSSID that advertises the exact SSID bytes of other
-// known BSSIDs but with weaker security than they do.
-//
-// It is evaluated when an AP's auth mode becomes known (first ap_observed
-// for that BSSID, even if a beacon report created the row earlier), and in
-// both directions: the newly identified AP may be the weaker one, or it may
-// be a stronger sibling that reveals an already-known weaker one.
-type rogueAPDetector struct{ cd *cooldown }
+// known BSSIDs but with weaker security than they do. Each BSSID is evaluated
+// exactly once, after the warm-up window. The comparison runs in both
+// directions (the AP may be the weak one or a strong sibling revealing a
+// weaker one).
+type rogueAPDetector struct {
+	cd      *cooldown
+	checked map[string]bool
+}
 
 func newRogueAPDetector() *rogueAPDetector {
-	return &rogueAPDetector{cd: newCooldown(30 * time.Minute)}
+	return &rogueAPDetector{cd: newCooldown(30 * time.Minute), checked: map[string]bool{}}
 }
 
 func (d *rogueAPDetector) Name() string { return "rogue_ap_indicator" }
@@ -33,16 +39,21 @@ func (d *rogueAPDetector) Observe(c *Context) []Finding {
 	if ev.Type != events.TypeAPObserved || c.CurAP == nil || c.Lookup == nil {
 		return nil
 	}
-	if c.PrevAP != nil && c.PrevAP.AuthMode != nil {
-		return nil // auth mode already known; changes are security_change's job
-	}
 	cur := c.CurAP
-	if cur.SSIDHex == "" || strings.Trim(cur.SSIDHex, "0") == "" { // hidden
-		return nil
+	if d.checked[cur.BSSID] {
+		return nil // evaluated once already
 	}
 	if _, ok := authRank[deref(cur.AuthMode)]; !ok {
+		return nil // auth mode not yet known; wait for an ap_observed that has it
+	}
+	if c.CoreUptime < RogueWarmup {
+		return nil // inventory still filling; re-evaluated after warm-up on the next ap_observed
+	}
+	if cur.SSIDHex == "" || strings.Trim(cur.SSIDHex, "0") == "" { // hidden
+		d.checked[cur.BSSID] = true
 		return nil
 	}
+	d.checked[cur.BSSID] = true
 	peers, err := c.Lookup.APsBySSIDHex(cur.SSIDHex)
 	if err != nil {
 		return nil

@@ -86,11 +86,33 @@ under `-race`.
   (kernel `urb status -71`) until physically replugged; not recoverable in
   software.
 
+## Deauthentication burst detection
+
+The burst path is validated end to end by `TestDeauthBurstEndToEndOverSerial`
+(core/internal/ingest): a realistic burst of `wifi.deauth_observed` lines,
+framed and checksummed exactly as the firmware emits them, is fed through a
+pseudo-terminal into the real serial reader → framing/CRC → parse → ingest →
+detection → stored finding. This exercises every link except the ESP32 radio
+physically receiving a high volume of frames.
+
+WRAITH never transmits deauthentication frames, so a burst is never generated
+against any network for testing. The remaining hardware-only link — the radio
+hearing many such frames — shares the exact receive path already proven for a
+single deauth frame (`frame_parser` hardware test) and the on-device
+aggregation (`management_monitor` host test). To observe a genuine burst,
+watch WRAITH during an authorized test on a network and devices you own.
+
+## Retention
+
+`PruneEvents` / `RunPruner` are covered by `core/internal/storage`:
+pruning by age (observations cascade, findings kept), idempotency, the
+initial backlog sweep, and the keep-forever (retention 0) case.
+
 ## Not yet tested
 
-- Deauthentication *burst* findings on real traffic (needs many frames; WRAITH
-  does not generate them).
-- LCD (disabled pending electrical verification).
+- Deauthentication *burst* findings from frames an ESP32 actually received
+  (would require generating frames WRAITH deliberately does not emit).
+- Multi-hour soak (in progress; see docs/roadmap.md Phase 6).
 - Dashboard rendering with populated data was not screenshotted (headless
   Firefox captures before fetches resolve); empty/loading states were inspected.
 

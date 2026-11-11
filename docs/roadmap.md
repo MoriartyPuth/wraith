@@ -26,7 +26,8 @@ Labels: `NOT IMPLEMENTED` · `IMPLEMENTED — NOT HARDWARE VALIDATED` ·
 | Wireless interface discovery | IMPLEMENTED — TESTED (on this host) |
 | Firmware JSON writer, protocol builders, 802.11 header parser | IMPLEMENTED — TESTED (host) |
 | Firmware transport, status/heartbeat, main | IMPLEMENTED — TESTED on hardware (nano-70b2a8) |
-| Firmware Wi-Fi / beacon / mgmt / detection / LCD | NOT IMPLEMENTED (APIs defined) |
+| Firmware Wi-Fi / beacon / mgmt | IMPLEMENTED — TESTED (Phase 2) |
+| Firmware LCD / host link | IMPLEMENTED — TESTED on hardware (Phase 5) |
 | Dashboard shell, 10 routes, API client, WS backoff hook | IMPLEMENTED — typecheck + build pass |
 | WebSocket endpoint | NOT IMPLEMENTED (returns 501) |
 
@@ -44,7 +45,7 @@ Labels: `NOT IMPLEMENTED` · `IMPLEMENTED — NOT HARDWARE VALIDATED` ·
 | Capture statistics in `sensor.status` message | IMPLEMENTED — TESTED on hardware |
 | Interrupt-driven console UART | IMPLEMENTED — TESTED on hardware |
 | On-device detection (`detection.c`) | Deferred: authoritative detection is in Core (Phase 3) |
-| LCD | Dropped from scope for now (user decision); stays disabled |
+| LCD (16x2 I2C) | IMPLEMENTED — TESTED on hardware in Phase 5 (PCF8574 @ 0x27). See docs/hardware.md. |
 | Probe responses (reveal hidden SSIDs) | NOT IMPLEMENTED |
 | Host→device commands (ping, channel config) | NOT IMPLEMENTED |
 
@@ -105,6 +106,6 @@ client (e.g. disconnect a phone from your own 2.4 GHz network).
 ## Phase 6 — Validation
 
 - [ ] Long soak (hours): memory, gaps, link health, DB growth
-- [ ] False-positive review of detectors on a day of real traffic
-- [ ] Data retention / pruning policy for events and observations
+- [~] False-positive review on a day of real traffic (soak running; rogue-AP warm-up added to cut startup FPs)
+- [x] Data retention / pruning policy (events + cascaded observations; `-retention-days`, default 7)
 - [ ] Documentation review

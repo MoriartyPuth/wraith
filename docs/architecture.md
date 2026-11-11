@@ -58,7 +58,9 @@ HTTP → close the database.
 | `firmware/src/frame_parser.c` | Bounds-checked 802.11 management header parsing |
 | `firmware/src/transport.c` | Message buffer + single writer task on UART0 |
 | `firmware/src/system_status.c` | Identity (MAC + boot id), state, heartbeat task |
-| `firmware/src/{wifi_monitor,beacon_parser,management_monitor,detection,lcd}.c` | Phase 2 (stubs with designed APIs) |
+| `firmware/src/{wifi_monitor,beacon_parser,management_monitor}.c` | Passive monitoring, parsing, aggregation |
+| `firmware/src/{lcd,lcd_screens,host_link}.c` | LCD display, host-link ping listener |
+| `firmware/src/detection.c` | On-device stub; detection lives in Core |
 | `core/internal/events` | Event model + strict v1 validator |
 | `core/internal/transport` | Line framing (bounded, fragment-safe), dedup/seq tracking |
 | `core/internal/storage` | SQLite (modernc, no CGO), embedded migrations, queries |

@@ -34,7 +34,15 @@ named identically, one WPA2-only and one WPA/WPA2-mixed → `low` indicator. The
 original rule missed it because a beacon report created the AP row before the
 auth mode was known; the rule now triggers on "auth mode became known".
 
-Detector state (windows, cooldowns) is in memory and resets when Core
+The rogue-AP detector waits out a 90 s warm-up after Core starts before
+evaluating any AP, and evaluates each BSSID exactly once afterwards, so it
+compares against a populated inventory rather than one still filling from
+beacon reports and the 60 s identity refresh. This removes a class of
+startup false positives (a legitimate multi-BSSID network flagged before all
+its siblings were seen). Comprehensive false-positive tuning is deferred to
+the Phase 6 soak review, where real-traffic data drives threshold choices.
+
+Detector state (windows, cooldowns, warm-up) is in memory and resets when Core
 restarts. All thresholds are constants in the code; they are starting points
 and need tuning against real environments (Phase 6 false-positive evaluation).
 

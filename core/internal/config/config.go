@@ -24,6 +24,14 @@ type Config struct {
 	SerialBaud   int      `json:"serial_baud"`
 	DashboardDir string   `json:"dashboard_dir"` // optional built dashboard to serve at /
 	AllowedHosts []string `json:"allowed_hosts"` // extra Host headers accepted (DNS-rebinding guard)
+
+	// Retention. Events (and the observations tied to them via ON DELETE
+	// CASCADE) older than EventRetentionDays are pruned. 0 = keep forever.
+	// Findings and the AP inventory are never auto-pruned (findings are small
+	// and are the analyst's record; the inventory is one row per BSSID).
+	EventRetentionDays int `json:"event_retention_days"`
+	// PruneIntervalMinutes is how often the pruner runs. 0 uses the default.
+	PruneIntervalMinutes int `json:"prune_interval_minutes"`
 }
 
 // Default returns the built-in defaults.
@@ -39,6 +47,10 @@ func Default() Config {
 		LogLevel:   "info",
 		LogFormat:  "text",
 		SerialBaud: 115200,
+		// ~100 events/min on this hardware is ~1M/week; 7 days keeps history
+		// useful while bounding the database. Override or set 0 to keep all.
+		EventRetentionDays:   7,
+		PruneIntervalMinutes: 60,
 	}
 }
 
@@ -54,6 +66,7 @@ func Load(args []string) (Config, error) {
 	level := fs.String("log-level", "", "log level: debug|info|warn|error")
 	format := fs.String("log-format", "", "log format: text|json")
 	dash := fs.String("dashboard-dir", "", "serve a built dashboard from this directory")
+	retain := fs.Int("retention-days", -1, "delete events older than N days (0 = keep forever)")
 	if err := fs.Parse(args); err != nil {
 		return cfg, err
 	}
@@ -83,6 +96,13 @@ func Load(args []string) (Config, error) {
 		}
 		cfg.SerialBaud = n
 	}
+	if v := os.Getenv("WRAITH_RETENTION_DAYS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return cfg, fmt.Errorf("WRAITH_RETENTION_DAYS: %w", err)
+		}
+		cfg.EventRetentionDays = n
+	}
 
 	set := func(dst *string, v string) {
 		if v != "" {
@@ -97,6 +117,9 @@ func Load(args []string) (Config, error) {
 	set(&cfg.DashboardDir, *dash)
 	if *baud != 0 {
 		cfg.SerialBaud = *baud
+	}
+	if *retain >= 0 {
+		cfg.EventRetentionDays = *retain
 	}
 	return cfg, cfg.Validate()
 }
@@ -122,6 +145,12 @@ func (c Config) Validate() error {
 	}
 	if c.SerialBaud <= 0 {
 		errs = append(errs, fmt.Errorf("serial_baud: %d", c.SerialBaud))
+	}
+	if c.EventRetentionDays < 0 {
+		errs = append(errs, fmt.Errorf("event_retention_days: %d (must be >= 0)", c.EventRetentionDays))
+	}
+	if c.PruneIntervalMinutes < 0 {
+		errs = append(errs, fmt.Errorf("prune_interval_minutes: %d", c.PruneIntervalMinutes))
 	}
 	return errors.Join(errs...)
 }

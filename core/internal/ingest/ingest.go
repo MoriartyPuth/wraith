@@ -36,13 +36,14 @@ type Pipeline struct {
 	log   *slog.Logger
 	seqs  *transport.SeqTracker
 	now   func() time.Time
+	start time.Time
 
 	Ingested, Duplicates, Gaps, Restarts, Failures atomic.Uint64
 }
 
 // New creates a pipeline. pub may be nil.
 func New(store *storage.Store, det *detection.Engine, pub Publisher, log *slog.Logger) *Pipeline {
-	return &Pipeline{store: store, det: det, pub: pub, log: log, seqs: transport.NewSeqTracker(4096), now: time.Now}
+	return &Pipeline{store: store, det: det, pub: pub, log: log, seqs: transport.NewSeqTracker(4096), now: time.Now, start: time.Now()}
 }
 
 // Run consumes events until in is closed or ctx is done.
@@ -169,7 +170,8 @@ func (p *Pipeline) Handle(ctx context.Context, ev *events.Event) error {
 				ap = prev
 			}
 		}
-		findings = p.det.Observe(&detection.Context{Event: ev, PrevAP: prev, CurAP: ap, Lookup: lookup{ctx, tx}, Now: ev.ReceivedAt})
+		findings = p.det.Observe(&detection.Context{Event: ev, PrevAP: prev, CurAP: ap, Lookup: lookup{ctx, tx},
+			Now: ev.ReceivedAt, CoreUptime: p.now().Sub(p.start)})
 		for _, f := range findings {
 			if err := tx.InsertFinding(ctx, f); err != nil {
 				return err

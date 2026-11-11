@@ -191,6 +191,7 @@ func TestDeauthBurstProducesStoredFinding(t *testing.T) {
 
 func TestRogueIndicatorThroughPipeline(t *testing.T) {
 	p, st, _ := setup(t)
+	p.start = time.Now().Add(-10 * time.Minute) // past the rogue detector warm-up
 	ap := func(seq int, bssid, auth string) *events.Event {
 		return line(t, "aaaa0001", seq, "wifi.ap_observed", `,"channel":6,"bssid":"`+bssid+`"`,
 			`{"ssid":"Home","ssid_hex":"486f6d65","rssi":-50,"auth_mode":"`+auth+`","hidden":false}`)

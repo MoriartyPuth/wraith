@@ -49,6 +49,23 @@ predates joining `dialout`, the unit starts Core via `sg dialout`; re-run the
 installer after your next login to switch to a direct start with
 `NoNewPrivileges=yes`. The service runs while you are logged in.
 
+## Data retention
+
+Core prunes events (and the observations linked to them) older than
+`event_retention_days` (default **7**). Findings and the access-point
+inventory are never auto-pruned. Pruning runs every `prune_interval_minutes`
+(default 60) in batches, so it never holds a long write lock.
+
+```bash
+wraith -retention-days 14          # keep two weeks
+wraith -retention-days 0           # keep everything (no pruning)
+WRAITH_RETENTION_DAYS=3 wraith     # same via environment
+```
+
+In a JSON config file: `"event_retention_days": 7, "prune_interval_minutes": 60`.
+Pruned counts appear in `/api/v1/statistics` under `runtime`
+(`pruned_events`, `pruned_observations`).
+
 `scripts/esp32-switch.sh` stops the service while it uses the port and
 restarts it afterwards; flash with `pio run -t upload` only after
 `systemctl --user stop wraith-core`.

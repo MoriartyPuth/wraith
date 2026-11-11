@@ -36,6 +36,10 @@ type Context struct {
 	PrevAP, CurAP *storage.AccessPoint
 	Lookup        Lookup
 	Now           time.Time
+	// CoreUptime is how long Core has been ingesting. Cross-AP detectors
+	// (rogue-AP) wait out a warm-up so they compare against a populated
+	// inventory rather than a half-filled one.
+	CoreUptime time.Duration
 }
 
 // Finding is a detector result before it gets an ID and timestamp.

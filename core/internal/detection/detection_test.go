@@ -175,14 +175,14 @@ func TestRogueAPIndicator(t *testing.T) {
 	// Mesh node: same SSID, same security → nothing.
 	mesh := ap("AA:00:00:00:00:03", "Home", "wpa2-psk", "capable")
 	lk.aps = append(lk.aps, *mesh)
-	if f := e.Observe(&Context{Event: ev(events.TypeAPObserved, mesh.BSSID, nil), CurAP: mesh, Lookup: lk, Now: time.Now()}); len(f) != 0 {
+	if f := e.Observe(&Context{Event: ev(events.TypeAPObserved, mesh.BSSID, nil), CurAP: mesh, Lookup: lk, Now: time.Now(), CoreUptime: RogueWarmup + time.Second}); len(f) != 0 {
 		t.Fatalf("mesh node flagged: %+v", f)
 	}
 
 	// Open twin of a WPA2 network → suspicious/high.
 	twin := ap("02:11:22:33:44:55", "Home", "open", "not_advertised")
 	lk.aps = append(lk.aps, *twin)
-	f := e.Observe(&Context{Event: ev(events.TypeAPObserved, twin.BSSID, nil), CurAP: twin, Lookup: lk, Now: time.Now()})
+	f := e.Observe(&Context{Event: ev(events.TypeAPObserved, twin.BSSID, nil), CurAP: twin, Lookup: lk, Now: time.Now(), CoreUptime: RogueWarmup + time.Second})
 	if len(f) != 1 || f[0].Category != "rogue_ap_indicator" || f[0].Severity != "high" || f[0].Classification != ClassSuspicious {
 		t.Fatalf("open twin: %+v", f)
 	}
@@ -191,13 +191,13 @@ func TestRogueAPIndicator(t *testing.T) {
 	}
 
 	// Known BSSID with known auth mode is not re-evaluated.
-	if f := e.Observe(&Context{Event: ev(events.TypeAPObserved, twin.BSSID, nil), PrevAP: twin, CurAP: twin, Lookup: lk, Now: time.Now()}); len(f) != 0 {
+	if f := e.Observe(&Context{Event: ev(events.TypeAPObserved, twin.BSSID, nil), PrevAP: twin, CurAP: twin, Lookup: lk, Now: time.Now(), CoreUptime: RogueWarmup + time.Second}); len(f) != 0 {
 		t.Fatalf("known BSSID re-flagged: %+v", f)
 	}
 
 	// Hidden SSIDs are never compared.
 	hidden := &storage.AccessPoint{BSSID: "02:00:00:00:00:09", SSIDHex: "000000", AuthMode: twin.AuthMode}
-	if f := e.Observe(&Context{Event: ev(events.TypeAPObserved, hidden.BSSID, nil), CurAP: hidden, Lookup: lk, Now: time.Now()}); len(f) != 0 {
+	if f := e.Observe(&Context{Event: ev(events.TypeAPObserved, hidden.BSSID, nil), CurAP: hidden, Lookup: lk, Now: time.Now(), CoreUptime: RogueWarmup + time.Second}); len(f) != 0 {
 		t.Fatalf("hidden flagged: %+v", f)
 	}
 }
@@ -209,7 +209,7 @@ func TestRogueEvaluatedWhenAuthBecomesKnown(t *testing.T) {
 	weak := ap("F8:00:00:00:00:02", "Rozas", "wpa-wpa2-psk", "not_advertised")
 	lk := &fakeLookup{aps: []storage.AccessPoint{*strong, *weak}}
 	rowFromBeacon := &storage.AccessPoint{BSSID: weak.BSSID, SSID: "Rozas", SSIDHex: weak.SSIDHex, PMF: "unavailable"}
-	f := NewEngine().Observe(&Context{Event: ev(events.TypeAPObserved, weak.BSSID, nil), PrevAP: rowFromBeacon, CurAP: weak, Lookup: lk, Now: time.Now()})
+	f := NewEngine().Observe(&Context{Event: ev(events.TypeAPObserved, weak.BSSID, nil), PrevAP: rowFromBeacon, CurAP: weak, Lookup: lk, Now: time.Now(), CoreUptime: RogueWarmup + time.Second})
 	if len(f) != 1 || *f[0].BSSID != weak.BSSID || f[0].Severity != "low" {
 		t.Fatalf("one-step-weaker sibling: %+v", f)
 	}
@@ -222,11 +222,11 @@ func TestRogueFlagsEarlierWeakerSibling(t *testing.T) {
 	strong := ap("AA:00:00:00:00:0B", "Cafe", "wpa2-psk", "capable")
 	lk := &fakeLookup{aps: []storage.AccessPoint{*weak}}
 	e := NewEngine()
-	if f := e.Observe(&Context{Event: ev(events.TypeAPObserved, weak.BSSID, nil), CurAP: weak, Lookup: lk, Now: time.Now()}); len(f) != 0 {
+	if f := e.Observe(&Context{Event: ev(events.TypeAPObserved, weak.BSSID, nil), CurAP: weak, Lookup: lk, Now: time.Now(), CoreUptime: RogueWarmup + time.Second}); len(f) != 0 {
 		t.Fatalf("lone open AP flagged: %+v", f)
 	}
 	lk.aps = append(lk.aps, *strong)
-	f := e.Observe(&Context{Event: ev(events.TypeAPObserved, strong.BSSID, nil), CurAP: strong, Lookup: lk, Now: time.Now()})
+	f := e.Observe(&Context{Event: ev(events.TypeAPObserved, strong.BSSID, nil), CurAP: strong, Lookup: lk, Now: time.Now(), CoreUptime: RogueWarmup + time.Second})
 	if len(f) != 1 || *f[0].BSSID != weak.BSSID || f[0].Severity != "high" {
 		t.Fatalf("earlier weaker sibling not flagged: %+v", f)
 	}
@@ -242,5 +242,28 @@ func TestPMFInvalidOncePerBSSID(t *testing.T) {
 	}
 	if f := e.Observe(&Context{Event: ev(events.TypeBeaconObserved, B, meta), Now: time.Now()}); len(f) != 0 {
 		t.Fatal("reported twice")
+	}
+}
+
+func TestRogueWarmupSuppressesThenFires(t *testing.T) {
+	twin := ap("02:11:22:33:44:55", "Home", "open", "not_advertised")
+	lk := &fakeLookup{aps: []storage.AccessPoint{
+		*ap("AA:00:00:00:00:01", "Home", "wpa2-psk", "capable"), *twin}}
+	e := NewEngine()
+	// During warm-up: no finding, and the BSSID is NOT marked checked.
+	if f := e.Observe(&Context{Event: ev(events.TypeAPObserved, twin.BSSID, nil), CurAP: twin, Lookup: lk,
+		Now: time.Now(), CoreUptime: RogueWarmup - time.Second}); len(f) != 0 {
+		t.Fatalf("fired during warm-up: %+v", f)
+	}
+	// After warm-up: the same AP (e.g. a 60 s identity refresh) is evaluated.
+	f := e.Observe(&Context{Event: ev(events.TypeAPObserved, twin.BSSID, nil), CurAP: twin, Lookup: lk,
+		Now: time.Now(), CoreUptime: RogueWarmup + time.Second})
+	if len(f) != 1 || f[0].Category != "rogue_ap_indicator" {
+		t.Fatalf("not evaluated after warm-up: %+v", f)
+	}
+	// Evaluated once: a later refresh does not re-fire.
+	if f := e.Observe(&Context{Event: ev(events.TypeAPObserved, twin.BSSID, nil), CurAP: twin, Lookup: lk,
+		Now: time.Now(), CoreUptime: RogueWarmup + time.Minute}); len(f) != 0 {
+		t.Fatalf("re-fired: %+v", f)
 	}
 }

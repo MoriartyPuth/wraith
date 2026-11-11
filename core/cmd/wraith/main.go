@@ -18,6 +18,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -69,6 +70,21 @@ func run(args []string) error {
 	defer store.Close()
 	log.Info("database ready", "path", cfg.DBPath)
 
+	// Retention: prune events (and their observations) older than the policy.
+	var prunedEvents, prunedObs atomic.Uint64
+	go store.RunPruner(ctx, time.Duration(cfg.EventRetentionDays)*24*time.Hour,
+		time.Duration(cfg.PruneIntervalMinutes)*time.Minute, time.Now, func(r storage.PruneResult) {
+			prunedEvents.Add(uint64(r.Events))
+			prunedObs.Add(uint64(r.Observations))
+			log.Info("pruned old data", "events", r.Events, "observations", r.Observations,
+				"retention_days", cfg.EventRetentionDays)
+		})
+	if cfg.EventRetentionDays > 0 {
+		log.Info("retention", "event_retention_days", cfg.EventRetentionDays, "prune_interval_min", cfg.PruneIntervalMinutes)
+	} else {
+		log.Info("retention disabled: events are kept indefinitely")
+	}
+
 	hub := stream.NewHub(log, cfg.AllowedHosts)
 	pipe := ingest.New(store, detection.NewEngine(), hub, log)
 	providers := []capture.CaptureProvider{
@@ -103,6 +119,7 @@ func run(args []string) error {
 				"ingested": pipe.Ingested.Load(), "duplicates": pipe.Duplicates.Load(),
 				"seq_gaps": pipe.Gaps.Load(), "sensor_restarts": pipe.Restarts.Load(),
 				"ingest_failures": pipe.Failures.Load(), "stream_clients": uint64(hub.Clients()),
+				"pruned_events": prunedEvents.Load(), "pruned_observations": prunedObs.Load(),
 			}
 		},
 	})
