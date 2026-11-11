@@ -76,7 +76,7 @@ also fails esptool transfers at 460800 baud (115200 works).
 The display keeps its last text while powered, which is why it still showed
 the previous project's text before WRAITH drove it.
 
-Electrical note — **OUTSTANDING USER CHECK**: ESP32 GPIOs are not 5 V
+Electrical note — **user accepted the existing wiring (2026-11-12)**; not meter-measured. ESP32 GPIOs are not 5 V
 tolerant. If the backpack is powered from 5 V its pull-ups may hold SDA/SCL
 at 5 V. The display was already wired this way before WRAITH, so enabling the
 driver did not change the pin voltage; measuring SDA/SCL to GND with a

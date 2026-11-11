@@ -86,6 +86,20 @@ under `-race`.
   (kernel `urb status -71`) until physically replugged; not recoverable in
   software.
 
+## Soak (started 2026-11-11, ongoing)
+
+~2 h sample (live service, `~/.local/share/wraith/soak.log`): link stable,
+sensor connected, no stalls/reconnects/checksum failures in steady state.
+Memory rose ~4 MB during warm-up then held flat (26.1 → 26.5 MB over 80 min)
+— no leak. DB grows ~3.5 MB/h linearly; bounded by the 7-day retention.
+
+Finding: ~0.25 % of events are lost as whole dropped lines in the USB path
+(seen as `gap_count`, not silent — the board's `queue_drops` stays 0, so the
+loss is in the flaky CP2102 link, not the firmware). Harmless for passive
+monitoring (each AP is re-observed within seconds); it could slightly
+undercount a deauth burst, already a documented detector limitation. A longer
+soak is still worthwhile before calling Phase 6 complete.
+
 ## Deauthentication burst detection
 
 The burst path is validated end to end by `TestDeauthBurstEndToEndOverSerial`

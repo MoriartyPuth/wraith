@@ -105,7 +105,7 @@ client (e.g. disconnect a phone from your own 2.4 GHz network).
 
 ## Phase 6 — Validation
 
-- [ ] Long soak (hours): memory, gaps, link health, DB growth
+- [~] Long soak: ~2 h clean (memory flat, no silent loss, ~0.25% USB-path line loss counted as gaps); continue for a full day
 - [~] False-positive review on a day of real traffic (soak running; rogue-AP warm-up added to cut startup FPs)
 - [x] Data retention / pruning policy (events + cascaded observations; `-retention-days`, default 7)
 - [ ] Documentation review
