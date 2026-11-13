@@ -51,6 +51,8 @@ Labels: `NOT IMPLEMENTED` · `IMPLEMENTED — NOT HARDWARE VALIDATED` ·
 
 Open item: validate the deauth/disassoc path on hardware with an owned
 client (e.g. disconnect a phone from your own 2.4 GHz network).
+**Done in Phase 5** (2026-11-11): a phone leaving the owned "Bo" network
+produced a `wifi.disassoc_observed` (reason 8, unprotected).
 
 ## Phase 3 — WRAITH Core ✅ (2026-11-11, awaiting approval for Phase 4)
 
@@ -108,7 +110,9 @@ client (e.g. disconnect a phone from your own 2.4 GHz network).
 - [~] Soak/load: ~2 h live clean + accelerated 40k-event load (no leak); found+fixed O(n^2) prune (idx_obs_event_row). Full-day wall-clock soak optional.
 - [~] False-positive review on a day of real traffic (soak running; rogue-AP warm-up added to cut startup FPs)
 - [x] Data retention / pruning policy (events + cascaded observations; `-retention-days`, default 7)
-- [ ] Documentation review
+- [x] Documentation review (2026-11-13: all docs cross-checked against code; fixed
+  stale protocol/TX/client hardware-validation status, WS `hello` protocol
+  version, and the version-rejection message)
 
 ## Phase 7 — Deauth test transmission (2026-11-11)
 

@@ -1,7 +1,9 @@
 # WRAITH Event Protocol — v3
 
 Status: **IMPLEMENTED — TESTED** (Go validator + firmware serializer host tests).
-Not yet validated on ESP32 hardware.
+v1 events are extensively hardware-validated (phases 2–5); the v2 (`tx.*`) and
+v3 (`wifi.client_observed`) additions were validated on ESP32 hardware
+2026-11-12.
 
 All WRAITH components exchange events as JSON objects. The machine-readable
 schema is `protocol/schemas/event.v3.schema.json`; canonical valid/invalid
@@ -111,7 +113,8 @@ Sent at boot, on state change, and every 60 s. While monitoring, Nano's
 `message` carries capture statistics (≤ 5 s old), e.g.
 `monitoring 2.4GHz; aps=10 rx=767 drop=0 bad=0 deauth=0 disassoc=0`, where
 `drop` counts frames lost because the processing task fell behind. These are
-informational; a structured form is planned for protocol v2.
+informational; the counters are carried in the free-text `message` rather than
+as structured fields.
 ```
 state             "booting" | "online" | "degraded" | "error"
 firmware_version  string (semver)
@@ -269,7 +272,7 @@ Core rejects invalid events with a reason (`unsupported_version`,
 
 | type | data |
 |------|------|
-| `hello` | `{"protocol": 1}` on connect |
+| `hello` | `{"protocol": N}` on connect, where `N` is Core's newest protocol version (currently 3) |
 | `event` | stored event row (`id`, `event_id`, `event_type`, `payload`, …), after commit |
 | `access_point` | AP inventory row after an AP-related event |
 | `client` | client sighting row after a `wifi.client_observed` event (v3) |

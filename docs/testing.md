@@ -125,9 +125,10 @@ against any network for testing. The optional deauth *test* transmission
 (docs/tx.md) has its own host coverage: `firmware/test/host/test_tx.c` (frame
 builder, command parsing, limits, burst lifecycle, host-lost/radio aborts,
 gated build) and the Core API tests (`core/internal/api/tx_test.go`: every
-gate and error path, with a fake `Commander` provider). Flashing the `pio -e
-tx` build and validating `esp_wifi_80211_tx` behaviour on hardware is
-explicitly a Phase 7 open item.
+gate and error path, with a fake `Commander` provider). The `pio -e tx` build
+and `esp_wifi_80211_tx` behaviour were validated on hardware 2026-11-12: a
+5-frame deauth burst to an owned client reported `sent=5/requested=5 complete`
+with an observable disconnect (docs/tx.md, docs/hardware.md).
 
 ## Client sightings (protocol v3)
 

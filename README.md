@@ -9,7 +9,9 @@ A local-first platform for passive Wi-Fi observation and defensive monitoring:
 - **WRAITH Core** — Go service on Fedora: ingestion, SQLite, detection, REST + WebSocket.
 - **WRAITH Web** — React/TypeScript dashboard.
 
-> **Status: Phase 5 done** (runs as a systemd user service; LCD active). WRAITH Nano passively observes 2.4 GHz beacons
+> **Status: Phases 0–8 implemented** (Phase 6 validation closing out). Core
+> runs as a systemd user service; LCD active; client visibility and the gated
+> deauth test transmission are hardware-validated (2026-11-12). WRAITH Nano passively observes 2.4 GHz beacons
 > and deauth/disassoc frames; WRAITH Core ingests them over a checksummed USB
 > serial link, keeps an AP inventory with RSSI history, runs explainable
 > detectors and streams live updates; WRAITH Web shows all of it live, with

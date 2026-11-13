@@ -80,7 +80,7 @@ In a JSON config file: `"tx_enabled": true`. Both ends must opt in: the
 firmware is built with `cd firmware && pio run -e tx -t upload`, and Core runs
 with `-tx`. `/api/v1/system/info` reports `"tx_enabled"`, and the dashboard
 shows the test card on an AP page only when both are true and a sensor is
-connected. The feature is **not yet hardware-validated** (docs/tx.md,
+connected. The feature is **hardware-validated** (2026-11-12; see docs/tx.md,
 docs/hardware.md).
 
 `scripts/esp32-switch.sh` stops the service while it uses the port and

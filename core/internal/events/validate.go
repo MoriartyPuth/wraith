@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
+	"strconv"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -23,6 +26,21 @@ const (
 // management observation), v2 (+ tx.ack/tx.report, docs/tx.md) and v3
 // (+ wifi.client_observed, station sightings). Older sensors keep working.
 var SupportedVersions = map[int64]bool{1: true, 2: true, 3: true}
+
+// supportedVersionsList is the sorted supported versions as text, for error
+// messages (derived from SupportedVersions so the two never drift).
+var supportedVersionsList = func() string {
+	vs := make([]int, 0, len(SupportedVersions))
+	for v := range SupportedVersions {
+		vs = append(vs, int(v))
+	}
+	sort.Ints(vs)
+	parts := make([]string, len(vs))
+	for i, v := range vs {
+		parts[i] = strconv.Itoa(v)
+	}
+	return strings.Join(parts, ", ")
+}()
 
 // ValidationError explains why an event was rejected.
 type ValidationError struct {
@@ -249,7 +267,7 @@ func Parse(raw []byte) (*Event, error) {
 	}
 	ver, _ := top["version"].(json.Number).Int64()
 	if !SupportedVersions[ver] {
-		return nil, verr(ReasonUnsupportedVer, "version", "got %d, want one of 1, %d", ver, ProtocolVersion)
+		return nil, verr(ReasonUnsupportedVer, "version", "got %d, want one of %s", ver, supportedVersionsList)
 	}
 	et := top["event_type"].(string)
 	spec, ok := specsByVersion[ver][et]
