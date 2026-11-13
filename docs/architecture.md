@@ -36,7 +36,7 @@ HTTP → close the database.
 
 ## Principles
 
-- **One schema.** `docs/protocol.md` + `protocol/schemas/event.v3.schema.json`.
+- **One schema.** `docs/protocol.md` + `protocol/schemas/event.v4.schema.json`.
   The Go validator is the reference; firmware output is checked against it by
   `scripts/check-protocol.sh`. Strict: unknown fields are rejected.
 - **Providers are interchangeable.** Detection consumes `events.Event`
@@ -70,7 +70,7 @@ HTTP → close the database.
 | `firmware/src/tx_test.c` | Gated deauth test transmission engine (frame builder, limits, burst state machine) |
 | `firmware/src/tx_raw_override.c` | TX build only: allows validated deauth/disassoc frames past the driver's raw-frame check |
 | `firmware/src/detection.c` | On-device stub; detection lives in Core |
-| `core/internal/events` | Event model + strict v1/v2/v3 validator |
+| `core/internal/events` | Event model + strict v1–v4 validator |
 | `core/internal/transport` | Line framing (bounded, fragment-safe), dedup/seq tracking |
 | `core/internal/storage` | SQLite (modernc, no CGO), embedded migrations, AP/client inventory, queries |
 | `core/internal/capture` | Provider interface and manager (WRAITH's only source is the ESP32) |

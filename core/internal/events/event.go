@@ -9,8 +9,10 @@ import (
 )
 
 // ProtocolVersion is the newest envelope version this build emits and
-// accepts; v1 sensors keep working (see validate.go).
-const ProtocolVersion = 3
+// accepts; older sensors keep working (see validate.go). v4 added the
+// bluetooth.* event types (docs/bluetooth/event-protocol.md); the Wi-Fi-only
+// firmware build still emits v3.
+const ProtocolVersion = 4
 
 // MaxMessageSize is the maximum size of one serialized event, including the
 // trailing newline when framed on a serial link.
@@ -31,6 +33,20 @@ const (
 	TypeTxReport           = "tx.report"
 	TypeFinding            = "detection.finding"
 	TypeProviderStatus     = "capture.provider_status"
+
+	// Bluetooth event types (v4; docs/bluetooth/event-protocol.md). Emitted
+	// only by the Bluetooth-enabled firmware build (switch-mode Classic+BLE).
+	TypeBtClassicDiscovered = "bluetooth.classic.device_discovered"
+	TypeBtClassicUpdated    = "bluetooth.classic.device_updated"
+	TypeBtBleAdvObserved    = "bluetooth.ble.advertisement_observed"
+	TypeBtBleDiscovered     = "bluetooth.ble.device_discovered"
+	TypeBtBleUpdated        = "bluetooth.ble.device_updated"
+	TypeBtBleConnObserved   = "bluetooth.ble.connection_observed"
+	TypeBtBleConnLost       = "bluetooth.ble.connection_lost"
+	TypeBtGattService       = "bluetooth.ble.gatt_service_discovered"
+	TypeBtGattChar          = "bluetooth.ble.gatt_characteristic_discovered"
+	TypeBtSystemStatus      = "bluetooth.system.status"
+	TypeBtSystemError       = "bluetooth.system.error"
 )
 
 // Sources.
@@ -39,7 +55,7 @@ const (
 	SourceCore = "wraith-core"
 )
 
-// Event is a validated event (v1–v3). Metadata is kept raw; typed views are
+// Event is a validated event (v1–v4). Metadata is kept raw; typed views are
 // decoded on demand by consumers so the envelope stays cheap to pass around.
 type Event struct {
 	Version   int             `json:"version"`

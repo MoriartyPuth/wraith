@@ -1,0 +1,1250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wraith.local/protocol/event.v4.schema.json",
+  "title": "WRAITH event v4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "event_id",
+    "source",
+    "sensor_id",
+    "event_type",
+    "timestamp",
+    "seq",
+    "metadata"
+  ],
+  "properties": {
+    "version": {
+      "const": 4
+    },
+    "event_id": {
+      "$ref": "#/$defs/ident"
+    },
+    "source": {
+      "enum": [
+        "wraith-nano",
+        "wraith-core"
+      ]
+    },
+    "sensor_id": {
+      "$ref": "#/$defs/ident"
+    },
+    "event_type": {
+      "enum": [
+        "sensor.heartbeat",
+        "sensor.status",
+        "wifi.ap_observed",
+        "wifi.beacon_observed",
+        "wifi.deauth_observed",
+        "wifi.disassoc_observed",
+        "wifi.pmf_observed",
+        "wifi.client_observed",
+        "tx.ack",
+        "tx.report",
+        "detection.finding",
+        "capture.provider_status",
+        "bluetooth.classic.device_discovered",
+        "bluetooth.classic.device_updated",
+        "bluetooth.ble.advertisement_observed",
+        "bluetooth.ble.device_discovered",
+        "bluetooth.ble.device_updated",
+        "bluetooth.ble.connection_observed",
+        "bluetooth.ble.connection_lost",
+        "bluetooth.ble.gatt_service_discovered",
+        "bluetooth.ble.gatt_characteristic_discovered",
+        "bluetooth.system.status",
+        "bluetooth.system.error"
+      ]
+    },
+    "timestamp": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "channel": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 233
+    },
+    "bssid": {
+      "$ref": "#/$defs/mac"
+    },
+    "metadata": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "wifi.client_observed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/client_observed"
+          }
+        },
+        "required": [
+          "bssid",
+          "channel"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "sensor.heartbeat"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/heartbeat"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "sensor.status"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/status"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "wifi.ap_observed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "bssid",
+          "channel"
+        ],
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/ap"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "wifi.beacon_observed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "bssid",
+          "channel"
+        ],
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/beacon"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "enum": [
+              "wifi.deauth_observed",
+              "wifi.disassoc_observed"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "bssid"
+        ],
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/mgmt"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "wifi.pmf_observed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "bssid"
+        ],
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/pmf"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "tx.ack"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/tx_ack"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "tx.report"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "bssid",
+          "channel"
+        ],
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/tx_report"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "detection.finding"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/finding"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "capture.provider_status"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/provider"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "bluetooth.classic.device_discovered"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/bt_classic"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "bluetooth.classic.device_updated"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/bt_classic"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "bluetooth.ble.advertisement_observed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/bt_ble_adv"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "bluetooth.ble.device_discovered"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/bt_ble_device"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "bluetooth.ble.device_updated"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/bt_ble_device"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "bluetooth.ble.connection_observed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/bt_conn_observed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "bluetooth.ble.connection_lost"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/bt_conn_lost"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "bluetooth.ble.gatt_service_discovered"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/bt_gatt_service"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "bluetooth.ble.gatt_characteristic_discovered"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/bt_gatt_char"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "bluetooth.system.status"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/bt_system_status"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "const": "bluetooth.system.error"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "metadata": {
+            "$ref": "#/$defs/bt_system_error"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "ident": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,64}$"
+    },
+    "mac": {
+      "type": "string",
+      "pattern": "^[0-9A-F]{2}(:[0-9A-F]{2}){5}$"
+    },
+    "rssi": {
+      "type": "integer",
+      "minimum": -127,
+      "maximum": 0
+    },
+    "ssid": {
+      "type": "string",
+      "maxLength": 32
+    },
+    "ssid_hex": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{2}){0,32}$"
+    },
+    "heartbeat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "uptime_ms",
+        "free_heap",
+        "queue_drops"
+      ],
+      "properties": {
+        "uptime_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "free_heap": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "channel": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 14
+        },
+        "queue_drops": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "firmware_version",
+        "capabilities"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "booting",
+            "online",
+            "degraded",
+            "error"
+          ]
+        },
+        "firmware_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+([-+][A-Za-z0-9.-]+)?$"
+        },
+        "board": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "capabilities": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "string",
+            "maxLength": 32
+          }
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    },
+    "ap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ssid",
+        "ssid_hex",
+        "rssi"
+      ],
+      "properties": {
+        "ssid": {
+          "$ref": "#/$defs/ssid"
+        },
+        "ssid_hex": {
+          "$ref": "#/$defs/ssid_hex"
+        },
+        "rssi": {
+          "$ref": "#/$defs/rssi"
+        },
+        "auth_mode": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "hidden": {
+          "type": "boolean"
+        }
+      }
+    },
+    "rsn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "group_cipher",
+        "pairwise",
+        "akm",
+        "mfpc",
+        "mfpr"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "group_cipher": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "pairwise": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "maxLength": 32
+          }
+        },
+        "akm": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "maxLength": 32
+          }
+        },
+        "mfpc": {
+          "type": "boolean"
+        },
+        "mfpr": {
+          "type": "boolean"
+        }
+      }
+    },
+    "beacon": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ssid",
+        "ssid_hex",
+        "rssi"
+      ],
+      "properties": {
+        "ssid": {
+          "$ref": "#/$defs/ssid"
+        },
+        "ssid_hex": {
+          "$ref": "#/$defs/ssid_hex"
+        },
+        "rssi": {
+          "$ref": "#/$defs/rssi"
+        },
+        "beacon_interval": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "capability": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "rsn": {
+          "$ref": "#/$defs/rsn"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "mgmt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "count",
+        "window_ms"
+      ],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "window_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "src": {
+          "$ref": "#/$defs/mac"
+        },
+        "dst": {
+          "$ref": "#/$defs/mac"
+        },
+        "reason_codes": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          }
+        },
+        "rssi": {
+          "$ref": "#/$defs/rssi"
+        },
+        "protected": {
+          "type": "boolean"
+        }
+      }
+    },
+    "pmf": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pmf",
+        "rsn_present"
+      ],
+      "properties": {
+        "pmf": {
+          "enum": [
+            "required",
+            "capable",
+            "not_advertised",
+            "unavailable"
+          ]
+        },
+        "rsn_present": {
+          "type": "boolean"
+        }
+      }
+    },
+    "tx_ack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command",
+        "status"
+      ],
+      "properties": {
+        "command": {
+          "enum": [
+            "deauth",
+            "disassoc",
+            "status"
+          ]
+        },
+        "status": {
+          "enum": [
+            "accepted",
+            "rejected"
+          ]
+        },
+        "detail": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "client": {
+          "$ref": "#/$defs/mac"
+        }
+      }
+    },
+    "tx_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command",
+        "client",
+        "reason",
+        "sent",
+        "requested",
+        "outcome"
+      ],
+      "properties": {
+        "command": {
+          "enum": [
+            "deauth",
+            "disassoc"
+          ]
+        },
+        "client": {
+          "$ref": "#/$defs/mac"
+        },
+        "reason": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "sent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "requested": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "outcome": {
+          "enum": [
+            "complete",
+            "aborted_host_lost",
+            "aborted_radio"
+          ]
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "finding_id",
+        "category",
+        "severity",
+        "confidence",
+        "classification",
+        "explanation"
+      ],
+      "properties": {
+        "finding_id": {
+          "$ref": "#/$defs/ident"
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "classification": {
+          "enum": [
+            "observed",
+            "suspicious",
+            "potential_attack",
+            "confirmed"
+          ]
+        },
+        "explanation": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/ident"
+          }
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "state"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "state": {
+          "enum": [
+            "unavailable",
+            "stopped",
+            "starting",
+            "running",
+            "error"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 256
+        }
+      }
+    },
+    "client_observed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "client",
+        "frames",
+        "window_ms"
+      ],
+      "properties": {
+        "client": {
+          "$ref": "#/$defs/mac"
+        },
+        "frames": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "window_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rssi": {
+          "type": "integer",
+          "minimum": -127,
+          "maximum": 0
+        }
+      }
+    },
+    "bt_classic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "address"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/$defs/mac"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 248
+        },
+        "cod": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16777215
+        },
+        "device_class": {
+          "enum": [
+            "audio",
+            "phone",
+            "computer",
+            "peripheral",
+            "input",
+            "wearable",
+            "imaging",
+            "network",
+            "health",
+            "toy",
+            "uncategorized",
+            "unknown"
+          ]
+        },
+        "rssi": {
+          "type": "integer",
+          "minimum": -127,
+          "maximum": 0
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "window_ms": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "bt_ble_adv": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "address",
+        "address_type",
+        "rssi"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/$defs/mac"
+        },
+        "address_type": {
+          "enum": [
+            "public",
+            "random"
+          ]
+        },
+        "rssi": {
+          "type": "integer",
+          "minimum": -127,
+          "maximum": 0
+        },
+        "adv_type": {
+          "enum": [
+            "ind",
+            "direct_ind",
+            "scan_ind",
+            "nonconn_ind",
+            "scan_rsp"
+          ]
+        },
+        "payload_len": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "flags": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 248
+        },
+        "tx_power": {
+          "type": "integer",
+          "minimum": -127,
+          "maximum": 127
+        },
+        "services": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "string",
+            "maxLength": 36
+          }
+        },
+        "manufacturer_id": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "manufacturer_data": {
+          "$ref": "#/$defs/ssid_hex"
+        },
+        "window_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "bt_ble_device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "address",
+        "address_type"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/$defs/mac"
+        },
+        "address_type": {
+          "enum": [
+            "public",
+            "random"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 248
+        },
+        "rssi": {
+          "type": "integer",
+          "minimum": -127,
+          "maximum": 0
+        },
+        "services": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "string",
+            "maxLength": 36
+          }
+        },
+        "manufacturer_id": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "classification": {
+          "enum": [
+            "beacon",
+            "wearable",
+            "phone",
+            "computer",
+            "peripheral",
+            "sensor",
+            "tag",
+            "medical",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "bt_conn_observed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "address"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/$defs/mac"
+        },
+        "address_type": {
+          "enum": [
+            "public",
+            "random"
+          ]
+        }
+      }
+    },
+    "bt_conn_lost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "address"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/$defs/mac"
+        },
+        "address_type": {
+          "enum": [
+            "public",
+            "random"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    },
+    "bt_gatt_service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "address",
+        "uuid"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/$defs/mac"
+        },
+        "uuid": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "start_handle": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "end_handle": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "primary": {
+          "type": "boolean"
+        }
+      }
+    },
+    "bt_gatt_char": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "address",
+        "uuid"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/$defs/mac"
+        },
+        "service_uuid": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "uuid": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "handle": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "properties": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "maxLength": 24
+          }
+        }
+      }
+    },
+    "bt_system_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "mode"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "idle",
+            "scanning_ble",
+            "scanning_classic",
+            "scanning_dual",
+            "error"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "wifi",
+            "bluetooth"
+          ]
+        },
+        "classic_devices": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ble_devices": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    },
+    "bt_system_error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 256
+        }
+      }
+    }
+  }
+}

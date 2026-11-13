@@ -147,3 +147,24 @@ docs/protocol.md (`wifi.client_observed`) and docs/hardware.md.
 | Core API: `GET /clients`, `GET /access-points/{bssid}/clients` | IMPLEMENTED — TESTED |
 | Dashboard: Clients page, per-AP clients panel, deauth client picker, live refresh | IMPLEMENTED — typecheck + build pass |
 | Hardware: confirm phones/laptops appear with real MACs on the lab AP | TESTED 2026-11-12 (data-frame headers on channel) |
+
+## Bluetooth track (started 2026-11-13)
+
+Single-board **switch mode** (Wi-Fi OR Bluetooth, never both), Classic + BLE
+via Bluedroid, build-gated like TX. Rationale and coexistence limits:
+docs/bluetooth/architecture.md.
+
+| Phase | Item | Status |
+|-------|------|--------|
+| BT-1 | Protocol v4: `bluetooth.*` types, Go validator, v4 JSON schema, fixtures, generic ingest | IMPLEMENTED — TESTED (no hardware involved) |
+| BT-2 | Core: Bluetooth device inventory, migration `0005_bluetooth`, processor | NOT IMPLEMENTED |
+| BT-3 | REST `/api/v1/bluetooth/*` + WebSocket kinds, throttled | NOT IMPLEMENTED |
+| BT-4 | Dashboard Bluetooth section | NOT IMPLEMENTED |
+| BT-5 | Firmware: BT build env, Bluedroid init, custom partition, radio-mode switch | NOT IMPLEMENTED |
+| BT-6 | Firmware: BLE passive scan + AD parser (host-tested) | NOT IMPLEMENTED |
+| BT-7 | Firmware: bounded Classic inquiry + CoD/EIR parser | NOT IMPLEMENTED |
+| BT-8 | Firmware: device trackers + v4 event emission | NOT IMPLEMENTED |
+| BT-9 | Optional operator-initiated GATT discovery (off by default) | NOT IMPLEMENTED |
+| BT-10 | Bluetooth detection engine | NOT IMPLEMENTED |
+| BT-11 | LCD Bluetooth screens via the existing LCD task | NOT IMPLEMENTED |
+| BT-12 | Hardware validation + Wi-Fi regression (mode switch both ways, heap, gaps) | BLOCKED — HARDWARE REQUIRED |

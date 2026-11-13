@@ -1,0 +1,1 @@
+{"version":4,"event_id":"bt-102","source":"wraith-nano","sensor_id":"nano-70b2a8","event_type":"bluetooth.ble.device_discovered","timestamp":0,"seq":102,"metadata":{"address":"11:22:33:44:55:66","address_type":"public","name":"Flipper","rssi":-55,"services":["180a"],"manufacturer_id":76,"classification":"beacon","confidence":0.6,"count":3}}

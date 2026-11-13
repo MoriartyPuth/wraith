@@ -1,0 +1,1 @@
+{"version":4,"event_id":"bt-100","source":"wraith-nano","sensor_id":"nano-70b2a8","event_type":"bluetooth.classic.device_discovered","timestamp":0,"seq":100,"metadata":{"address":"AA:BB:CC:DD:EE:01","name":"JBL Speaker","cod":2360324,"device_class":"audio","rssi":-62,"count":1}}

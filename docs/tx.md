@@ -130,7 +130,7 @@ when a burst runs, `tx.report` (final count and outcome:
 
 ## New protocol v2 event types
 
-Protocol bumped to **v2** (additive; Core accepts v1–v3 side by side — v3 later
+Protocol bumped to **v2** (additive; Core accepts v1–v4 side by side — v3 later
 added `wifi.client_observed`, see docs/protocol.md):
 
 ```

@@ -39,18 +39,23 @@ func TestInvalidFixtures(t *testing.T) {
 		t.Fatal("no invalid fixtures found")
 	}
 	want := map[string]string{
-		"version.json":                 ReasonUnsupportedVer,
-		"unknown_field.json":           ReasonUnknownField,
-		"unknown_meta.json":            ReasonUnknownField,
-		"missing_bssid.json":           ReasonMissingField,
-		"missing_meta.json":            ReasonMissingField,
-		"bad_event_type.json":          ReasonUnknownEventType,
-		"not_object.json":              ReasonMalformedJSON,
-		"client_bad_frames.json":       ReasonInvalidField,
-		"client_bad_mac.json":          ReasonInvalidField,
-		"client_missing_bssid.json":    ReasonMissingField,
-		"tx_ack_bad_status.json":       ReasonInvalidField,
-		"tx_report_unknown_field.json": ReasonUnknownField,
+		"version.json":                  ReasonUnsupportedVer,
+		"unknown_field.json":            ReasonUnknownField,
+		"unknown_meta.json":             ReasonUnknownField,
+		"missing_bssid.json":            ReasonMissingField,
+		"missing_meta.json":             ReasonMissingField,
+		"bad_event_type.json":           ReasonUnknownEventType,
+		"not_object.json":               ReasonMalformedJSON,
+		"client_bad_frames.json":        ReasonInvalidField,
+		"client_bad_mac.json":           ReasonInvalidField,
+		"client_missing_bssid.json":     ReasonMissingField,
+		"tx_ack_bad_status.json":        ReasonInvalidField,
+		"tx_report_unknown_field.json":  ReasonUnknownField,
+		"bt_bad_address.json":           ReasonInvalidField,
+		"bt_ble_missing_address.json":   ReasonMissingField,
+		"bt_classic_unknown_field.json": ReasonUnknownField,
+		"bt_adv_bad_addr_type.json":     ReasonInvalidField,
+		"bt_wrong_version.json":         ReasonUnknownEventType,
 	}
 	for _, f := range files {
 		name := filepath.Base(f)

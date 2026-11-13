@@ -1,4 +1,4 @@
-# WRAITH Event Protocol — v3
+# WRAITH Event Protocol — v4
 
 Status: **IMPLEMENTED — TESTED** (Go validator + firmware serializer host tests).
 v1 events are extensively hardware-validated (phases 2–5); the v2 (`tx.*`) and
@@ -6,15 +6,18 @@ v3 (`wifi.client_observed`) additions were validated on ESP32 hardware
 2026-11-12.
 
 All WRAITH components exchange events as JSON objects. The machine-readable
-schema is `protocol/schemas/event.v3.schema.json`; canonical valid/invalid
+schema is `protocol/schemas/event.v4.schema.json`; canonical valid/invalid
 examples live in `protocol/fixtures/`. The Go validator
 (`core/internal/events`) is the reference implementation and is tested against
 those fixtures. The firmware serializer is checked against the Go validator by
 `scripts/check-protocol.sh`.
 
-v3 is **v2 plus one event type**: `wifi.client_observed` (station sightings
-from data frames). v2 was v1 plus `tx.ack`/`tx.report` (deauth test
-transmission, docs/tx.md). Core accepts v1, v2 and v3 envelopes; sensors built
+v4 is **v3 plus the `bluetooth.*` event types** (Bluetooth Classic + BLE,
+emitted only by the Bluetooth-enabled switch-mode firmware build; see
+[docs/bluetooth/event-protocol.md](bluetooth/event-protocol.md)). The
+Wi-Fi-only firmware build still emits v3. v3 was v2 plus one event type:
+`wifi.client_observed` (station sightings from data frames). v2 was v1 plus `tx.ack`/`tx.report` (deauth test
+transmission, docs/tx.md). Core accepts v1–v4 envelopes; sensors built
 for older versions keep working.
 
 ## Framing (USB serial)
@@ -40,7 +43,7 @@ for older versions keep working.
 
 | Field        | Type    | Required | Rules |
 |--------------|---------|----------|-------|
-| `version`    | integer | yes      | `1`, `2` or `3`. `tx.*` require v2; `wifi.client_observed` requires v3. |
+| `version`    | integer | yes      | `1`–`4`. `tx.*` require v2; `wifi.client_observed` requires v3; `bluetooth.*` require v4. |
 | `event_id`   | string  | yes      | 1–64 chars, `[A-Za-z0-9._:-]`. Unique per sensor. |
 | `source`     | string  | yes      | `wraith-nano`, `wraith-core`. (`tshark`/`kismet` were removed: WRAITH has no host capture.) |
 | `sensor_id`  | string  | yes      | 1–64 chars, `[A-Za-z0-9._:-]`. |
@@ -272,7 +275,7 @@ Core rejects invalid events with a reason (`unsupported_version`,
 
 | type | data |
 |------|------|
-| `hello` | `{"protocol": N}` on connect, where `N` is Core's newest protocol version (currently 3) |
+| `hello` | `{"protocol": N}` on connect, where `N` is Core's newest protocol version (currently 4) |
 | `event` | stored event row (`id`, `event_id`, `event_type`, `payload`, …), after commit |
 | `access_point` | AP inventory row after an AP-related event |
 | `client` | client sighting row after a `wifi.client_observed` event (v3) |
@@ -289,7 +292,8 @@ re-fetch via REST. Browser `Origin` must be a loopback host (or listed in
 
 Additive changes to metadata require a version bump because validation is
 strict. v2 added the `tx.*` event types (2026-11-11) and v3 added
-`wifi.client_observed` (2026-11-12). Core supports v1–v3 side by side
+`wifi.client_observed` (2026-11-12), and v4 added the `bluetooth.*` event
+types (2026-11-13). Core supports v1–v4 side by side
 (`specsByVersion` in `core/internal/events`), and the live stream's `hello`
 message carries the Core's protocol version. Sensors report their protocol
 version implicitly through the events they send.

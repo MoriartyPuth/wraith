@@ -1,0 +1,1 @@
+{"version":4,"event_id":"bt-104","source":"wraith-nano","sensor_id":"nano-70b2a8","event_type":"bluetooth.system.status","timestamp":0,"seq":104,"metadata":{"state":"scanning_dual","mode":"bluetooth","classic_devices":4,"ble_devices":12,"message":"switch-mode: wifi paused"}}

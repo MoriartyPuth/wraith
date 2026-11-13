@@ -283,3 +283,50 @@ func TestClientSighting(t *testing.T) {
 		t.Fatalf("list clients: %v %d %v", err, total, cs)
 	}
 }
+
+// Protocol v4: Bluetooth events from the switch-mode firmware build must be
+// accepted and stored as generic events, without touching Wi-Fi state (no AP
+// rows, no RSSI observations, no Wi-Fi findings) and without ingest failures.
+// Bluetooth-specific inventory arrives in a later phase; until then the event
+// history is the record.
+func TestBluetoothEventsStoredWithoutTouchingWifi(t *testing.T) {
+	p, st, pub := setup(t)
+	ctx := context.Background()
+	v4 := func(seq int, typ, meta string) *events.Event {
+		raw := fmt.Sprintf(`{"version":4,"event_id":"b1e70001-%d","source":"wraith-nano","sensor_id":"nano-70b2a8","event_type":"%s","timestamp":0,"seq":%d,"metadata":%s}`,
+			seq, typ, seq, meta)
+		ev, err := events.Parse([]byte(raw))
+		if err != nil {
+			t.Fatalf("fixture invalid: %v\n%s", err, raw)
+		}
+		return ev
+	}
+	feed(t, p,
+		v4(0, events.TypeBtSystemStatus, `{"state":"scanning_dual","mode":"bluetooth","classic_devices":0,"ble_devices":0}`),
+		v4(1, events.TypeBtClassicDiscovered, `{"address":"AA:BB:CC:DD:EE:01","name":"Speaker","cod":2360324,"device_class":"audio","rssi":-62,"count":1}`),
+		v4(2, events.TypeBtBleAdvObserved, `{"address":"11:22:33:44:55:66","address_type":"random","rssi":-70,"manufacturer_id":76,"manufacturer_data":"4c000215","count":4,"window_ms":10000}`),
+		v4(3, events.TypeBtBleDiscovered, `{"address":"11:22:33:44:55:66","address_type":"random","rssi":-70,"count":1}`),
+		v4(4, events.TypeBtSystemError, `{"code":"inquiry_failed","message":"esp_bt_gap_start_discovery: ESP_FAIL"}`),
+	)
+	if p.Failures.Load() != 0 || p.Ingested.Load() != 5 {
+		t.Fatalf("failures=%d ingested=%d", p.Failures.Load(), p.Ingested.Load())
+	}
+	evs, total, err := st.ListEvents(ctx, storage.Page{Limit: 10}, storage.EventFilter{})
+	if err != nil || total != 5 || len(evs) != 5 {
+		t.Fatalf("stored events: %v total=%d", err, total)
+	}
+	if _, aps, _ := st.ListAccessPoints(ctx, storage.Page{Limit: 10}); aps != 0 {
+		t.Fatalf("bluetooth events created %d AP rows", aps)
+	}
+	if _, fs, _ := st.ListFindings(ctx, storage.Page{Limit: 10}); fs != 0 {
+		t.Fatalf("bluetooth events produced %d Wi-Fi findings", fs)
+	}
+	if pub.msgs[stream.KindEvent] != 5 || pub.msgs[stream.KindAP] != 0 || pub.msgs["client"] != 0 {
+		t.Fatalf("published: %v", pub.msgs)
+	}
+	// The sensor is still tracked (seq continuity across the v4 events).
+	s, err := st.GetSensor(ctx, "nano-70b2a8")
+	if err != nil || s.GapCount != 0 {
+		t.Fatalf("sensor: %+v %v", s, err)
+	}
+}

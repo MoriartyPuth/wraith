@@ -1,0 +1,1 @@
+{"version":4,"event_id":"bt-202","source":"wraith-nano","sensor_id":"nano-70b2a8","event_type":"bluetooth.classic.device_discovered","timestamp":0,"seq":202,"metadata":{"address":"AA:BB:CC:DD:EE:01","vendor":"x"}}

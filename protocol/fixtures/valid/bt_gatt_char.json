@@ -1,0 +1,1 @@
+{"version":4,"event_id":"bt-103","source":"wraith-nano","sensor_id":"nano-70b2a8","event_type":"bluetooth.ble.gatt_characteristic_discovered","timestamp":0,"seq":103,"metadata":{"address":"11:22:33:44:55:66","service_uuid":"180f","uuid":"2a19","handle":42,"properties":["read","notify"]}}

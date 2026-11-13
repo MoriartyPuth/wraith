@@ -23,9 +23,10 @@ const (
 )
 
 // SupportedVersions are the envelope versions this build accepts: v1 (AP and
-// management observation), v2 (+ tx.ack/tx.report, docs/tx.md) and v3
-// (+ wifi.client_observed, station sightings). Older sensors keep working.
-var SupportedVersions = map[int64]bool{1: true, 2: true, 3: true}
+// management observation), v2 (+ tx.ack/tx.report, docs/tx.md), v3
+// (+ wifi.client_observed, station sightings) and v4 (+ bluetooth.* events,
+// docs/bluetooth/event-protocol.md). Older sensors keep working.
+var SupportedVersions = map[int64]bool{1: true, 2: true, 3: true, 4: true}
 
 // supportedVersionsList is the sorted supported versions as text, for error
 // messages (derived from SupportedVersions so the two never drift).
@@ -209,23 +210,123 @@ var clientSpecs = map[string]typeSpec{
 	}},
 }
 
-// specsByVersion: v2 is v1 plus the tx event types; v3 adds client sightings.
+// btSpecs are the v4 additions: Bluetooth Classic + BLE observation events,
+// emitted only by the Bluetooth-enabled firmware build (switch-mode; the
+// radio runs Wi-Fi OR Bluetooth, never both). All Bluetooth specifics live in
+// metadata — the envelope's bssid/channel stay Wi-Fi-only. The device address
+// is metadata "address" (BD_ADDR, same AA:BB:CC:DD:EE:FF form as a MAC).
+// See docs/bluetooth/event-protocol.md.
+var btSpecs = map[string]typeSpec{
+	TypeBtClassicDiscovered: {meta: btClassicFields},
+	TypeBtClassicUpdated:    {meta: btClassicFields},
+	TypeBtBleAdvObserved: {meta: []field{
+		{name: "address", k: kMAC, req: true},
+		{name: "address_type", k: kEnum, req: true, enum: btAddrTypes},
+		intF("rssi", true, -127, 0),
+		{name: "adv_type", k: kEnum, enum: []string{"ind", "direct_ind", "scan_ind", "nonconn_ind", "scan_rsp"}},
+		intF("payload_len", false, 0, 255),
+		intF("flags", false, 0, 255),
+		{name: "name", k: kStr, maxLen: 248},
+		intF("tx_power", false, -127, 127),
+		{name: "services", k: kStrArr, maxLen: 16, itemLen: 36},
+		intF("manufacturer_id", false, 0, 65535),
+		{name: "manufacturer_data", k: kHex},
+		intF("window_ms", false, 1, maxInt),
+		intF("count", false, 1, maxInt),
+	}},
+	TypeBtBleDiscovered: {meta: btBleDeviceFields},
+	TypeBtBleUpdated:    {meta: btBleDeviceFields},
+	TypeBtBleConnObserved: {meta: []field{
+		{name: "address", k: kMAC, req: true},
+		{name: "address_type", k: kEnum, enum: btAddrTypes},
+	}},
+	TypeBtBleConnLost: {meta: []field{
+		{name: "address", k: kMAC, req: true},
+		{name: "address_type", k: kEnum, enum: btAddrTypes},
+		{name: "reason", k: kStr, maxLen: 128},
+	}},
+	TypeBtGattService: {meta: []field{
+		{name: "address", k: kMAC, req: true},
+		{name: "uuid", k: kStr, req: true, maxLen: 36},
+		intF("start_handle", false, 0, 65535),
+		intF("end_handle", false, 0, 65535),
+		{name: "primary", k: kBool},
+	}},
+	TypeBtGattChar: {meta: []field{
+		{name: "address", k: kMAC, req: true},
+		{name: "service_uuid", k: kStr, maxLen: 36},
+		{name: "uuid", k: kStr, req: true, maxLen: 36},
+		intF("handle", false, 0, 65535),
+		{name: "properties", k: kStrArr, maxLen: 8, itemLen: 24},
+	}},
+	TypeBtSystemStatus: {meta: []field{
+		{name: "state", k: kEnum, req: true,
+			enum: []string{"idle", "scanning_ble", "scanning_classic", "scanning_dual", "error"}},
+		{name: "mode", k: kEnum, req: true, enum: []string{"wifi", "bluetooth"}},
+		intF("classic_devices", false, 0, maxInt),
+		intF("ble_devices", false, 0, maxInt),
+		{name: "message", k: kStr, maxLen: 128},
+	}},
+	TypeBtSystemError: {meta: []field{
+		{name: "code", k: kStr, req: true, maxLen: 64},
+		{name: "message", k: kStr, req: true, maxLen: 256},
+	}},
+}
+
+// btAddrTypes: BLE advertiser address types. "random" covers static and
+// private (resolvable/non-resolvable) addresses — WRAITH never assumes a
+// random address maps to one physical device.
+var btAddrTypes = []string{"public", "random"}
+
+var btClassicFields = []field{
+	{name: "address", k: kMAC, req: true},
+	{name: "name", k: kStr, maxLen: 248},
+	intF("cod", false, 0, 16777215), // 24-bit Class of Device
+	{name: "device_class", k: kEnum, enum: []string{
+		"audio", "phone", "computer", "peripheral", "input", "wearable",
+		"imaging", "network", "health", "toy", "uncategorized", "unknown"}},
+	intF("rssi", false, -127, 0),
+	intF("count", false, 1, maxInt),
+	intF("window_ms", false, 1, maxInt),
+}
+
+var btBleDeviceFields = []field{
+	{name: "address", k: kMAC, req: true},
+	{name: "address_type", k: kEnum, req: true, enum: btAddrTypes},
+	{name: "name", k: kStr, maxLen: 248},
+	intF("rssi", false, -127, 0),
+	{name: "services", k: kStrArr, maxLen: 16, itemLen: 36},
+	intF("manufacturer_id", false, 0, 65535),
+	{name: "classification", k: kEnum, enum: []string{
+		"beacon", "wearable", "phone", "computer", "peripheral",
+		"sensor", "tag", "medical", "unknown"}},
+	{name: "confidence", k: kNum, min: 0, max: 1},
+	intF("count", false, 1, maxInt),
+}
+
+// specsByVersion: v2 is v1 plus the tx event types; v3 adds client sightings;
+// v4 adds the bluetooth.* events. Each is a superset of the one before.
 var specsByVersion = func() map[int64]map[string]typeSpec {
-	v2 := make(map[string]typeSpec, len(specs)+len(txSpecs))
-	for k, v := range specs {
-		v2[k] = v
+	merge := func(base map[string]typeSpec, add ...map[string]typeSpec) map[string]typeSpec {
+		n := len(base)
+		for _, m := range add {
+			n += len(m)
+		}
+		out := make(map[string]typeSpec, n)
+		for k, v := range base {
+			out[k] = v
+		}
+		for _, m := range add {
+			for k, v := range m {
+				out[k] = v
+			}
+		}
+		return out
 	}
-	for k, v := range txSpecs {
-		v2[k] = v
-	}
-	v3 := make(map[string]typeSpec, len(v2)+len(clientSpecs))
-	for k, v := range v2 {
-		v3[k] = v
-	}
-	for k, v := range clientSpecs {
-		v3[k] = v
-	}
-	return map[int64]map[string]typeSpec{1: specs, 2: v2, 3: v3}
+	v2 := merge(specs, txSpecs)
+	v3 := merge(v2, clientSpecs)
+	v4 := merge(v3, btSpecs)
+	return map[int64]map[string]typeSpec{1: specs, 2: v2, 3: v3, 4: v4}
 }()
 
 var envelopeFields = []field{

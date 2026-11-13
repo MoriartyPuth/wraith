@@ -1,0 +1,1 @@
+{"version":4,"event_id":"bt-200","source":"wraith-nano","sensor_id":"nano-70b2a8","event_type":"bluetooth.ble.advertisement_observed","timestamp":0,"seq":200,"metadata":{"address":"ZZ:BB:CC:DD:EE:01","address_type":"random","rssi":-70}}
