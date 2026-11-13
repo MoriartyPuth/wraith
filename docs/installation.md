@@ -51,8 +51,9 @@ installer after your next login to switch to a direct start with
 ## Data retention
 
 Core prunes events (and the observations linked to them) older than
-`event_retention_days` (default **7**). Findings and the access-point
-inventory are never auto-pruned. Pruning runs every `prune_interval_minutes`
+`event_retention_days` (default **7**). Wi-Fi client sightings and Bluetooth
+device rows not seen within that window are removed too. Findings and the
+access-point inventory are never auto-pruned. Pruning runs every `prune_interval_minutes`
 (default 60) in batches, so it never holds a long write lock.
 
 ```bash

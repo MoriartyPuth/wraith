@@ -1,8 +1,8 @@
 # Bluetooth event protocol (protocol v4)
 
-Status: **IMPLEMENTED — TESTED (Core validator, schema, fixtures, ingest).**
-No firmware emits these events yet (the Bluetooth firmware build is a later
-phase), so nothing here is hardware-validated.
+Status: **IMPLEMENTED — TESTED (Core validator, schema, fixtures, ingest,
+device inventory).** No firmware emits these events yet (the Bluetooth
+firmware build is a later phase), so nothing here is hardware-validated.
 
 Protocol v4 is v3 plus the `bluetooth.*` event types below. Everything else —
 framing (`<json>\t<crc32>\n`), the 1024-byte line limit, event IDs, sequence
@@ -124,6 +124,48 @@ code     string ≤ 64    e.g. "controller_init_failed", "inquiry_failed"
 message  string ≤ 256
 ```
 
+## Counting
+
+Every device and advertisement event may carry `count`: the number of
+observations **this event represents that were not reported before**. Core
+adds it to the device's `observations` total, so a sensor must never resend a
+cumulative count.
+
+| Event | `count` absent means |
+|-------|----------------------|
+| `bluetooth.classic.device_discovered` / `_updated` | 1 (the event is one sighting) |
+| `bluetooth.ble.advertisement_observed` | 1 |
+| `bluetooth.ble.device_discovered` / `_updated` | 0 (a tracker snapshot adds nothing on its own) |
+
+## Core inventory (BT-2)
+
+`core/internal/bluetooth` folds every stored `bluetooth.*` event into SQLite
+(migration `0005_bluetooth`), inside the same transaction as the event insert,
+without reading or writing any Wi-Fi table:
+
+- **`bt_devices`** — one row per (transport, address, address_type); Classic
+  rows use address_type `""`. Keeps first/last seen, `observations` (see
+  Counting), last RSSI and a rolling average (EWMA, weight 0.25), the sorted
+  union of advertised service UUIDs (lowercased, ≤ 32), and the latest name,
+  manufacturer id and TX power. A field the sensor never reported stays NULL
+  and is never filled in by guesswork; an empty name never overwrites a known
+  one. Classic `device_class` is decoded from the reported Class of Device
+  when the sensor does not send it (major device class; peripherals split into
+  `input` vs `peripheral` by the minor class). BLE `classification` is the
+  sensor's inference and is stored as such, with its confidence.
+- **`bt_observations`** — one row per device-related event (RSSI history and
+  the device → events link). GATT and connection events carry no address type;
+  Core links them to the most recently seen BLE row with that address.
+  Removed together with their event by retention pruning.
+- **`bt_sensor_status`** — the latest `bluetooth.system.status` per sensor
+  (radio mode, scan state, counts) and a tally of `bluetooth.system.error`
+  with the most recent code and message.
+
+Retention: Bluetooth addresses whose `last_seen` is older than the event
+retention window are deleted by the regular pruner (reported as
+`BTDevices` in the prune result), as for Wi-Fi client sightings. This keeps
+rotating BLE random addresses from growing the table without bound.
+
 ## Fixtures and tests
 
 - Valid: `protocol/fixtures/valid/bt_*.json` (Classic device, BLE
@@ -136,3 +178,8 @@ message  string ≤ 256
 - Ingest: `TestBluetoothEventsStoredWithoutTouchingWifi` feeds v4 events
   through the real pipeline: stored as events, 0 failures, no AP rows, no
   Wi-Fi findings, no sequence gaps.
+- Inventory: `TestBluetoothInventoryThroughPipeline` (all 11 types, counting,
+  services union, RSSI average, GATT address-type resolution, status and error
+  tally, Wi-Fi tables untouched) and `TestBluetoothRetention`; unit tests for
+  Class-of-Device decoding and the merge rules in `core/internal/bluetooth`.
+  Each rule was mutation-checked (the tests fail when it is broken).

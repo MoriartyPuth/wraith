@@ -330,3 +330,122 @@ func TestBluetoothEventsStoredWithoutTouchingWifi(t *testing.T) {
 		t.Fatalf("sensor: %+v %v", s, err)
 	}
 }
+
+// bt builds and validates a v4 Bluetooth event exactly as it would arrive.
+func bt(t *testing.T, seq int, typ, meta string) *events.Event {
+	t.Helper()
+	raw := fmt.Sprintf(`{"version":4,"event_id":"b7b70002-%d","source":"wraith-nano","sensor_id":"nano-70b2a8","event_type":"%s","timestamp":0,"seq":%d,"metadata":%s}`,
+		seq, typ, seq, meta)
+	ev, err := events.Parse([]byte(raw))
+	if err != nil {
+		t.Fatalf("fixture invalid: %v\n%s", err, raw)
+	}
+	return ev
+}
+
+// The Bluetooth inventory end to end: every v4 type is handled, counts follow
+// docs/bluetooth/event-protocol.md "Counting", GATT events without an address
+// type are linked to the right device, and Wi-Fi state is never touched.
+func TestBluetoothInventoryThroughPipeline(t *testing.T) {
+	p, st, _ := setup(t)
+	ctx := context.Background()
+	const spk, band = "AA:BB:CC:DD:EE:01", "11:22:33:44:55:66"
+	feed(t, p,
+		bt(t, 0, events.TypeBtSystemStatus, `{"state":"scanning_dual","mode":"bluetooth"}`),
+		bt(t, 1, events.TypeBtClassicDiscovered, `{"address":"`+spk+`","cod":2360324,"count":1}`),
+		bt(t, 2, events.TypeBtClassicUpdated, `{"address":"`+spk+`","name":"Speaker","rssi":-62,"count":2}`),
+		bt(t, 3, events.TypeBtBleAdvObserved, `{"address":"`+band+`","address_type":"random","rssi":-80,"services":["180F"],"manufacturer_id":343,"count":4}`),
+		bt(t, 4, events.TypeBtBleAdvObserved, `{"address":"`+band+`","address_type":"random","rssi":-60,"services":["fe95"]}`),
+		bt(t, 5, events.TypeBtBleDiscovered, `{"address":"`+band+`","address_type":"random","name":"Band","classification":"wearable","confidence":0.7}`),
+		bt(t, 6, events.TypeBtBleUpdated, `{"address":"`+band+`","address_type":"random","count":2}`),
+		bt(t, 7, events.TypeBtBleConnObserved, `{"address":"`+band+`","address_type":"random"}`),
+		bt(t, 8, events.TypeBtGattService, `{"address":"`+band+`","uuid":"180f","primary":true}`),
+		bt(t, 9, events.TypeBtGattChar, `{"address":"`+band+`","service_uuid":"180f","uuid":"2a19","properties":["read","notify"]}`),
+		bt(t, 10, events.TypeBtBleConnLost, `{"address":"`+band+`","reason":"operator disconnect"}`),
+		bt(t, 11, events.TypeBtSystemError, `{"code":"inquiry_failed","message":"ESP_FAIL"}`),
+		bt(t, 12, events.TypeBtSystemError, `{"code":"scan_stalled","message":"no reports for 30 s"}`),
+	)
+	if p.Failures.Load() != 0 || p.Ingested.Load() != 13 {
+		t.Fatalf("failures=%d ingested=%d", p.Failures.Load(), p.Ingested.Load())
+	}
+
+	c, err := st.GetBTDevice(ctx, storage.BTClassic, spk, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Observations != 3 || *c.Name != "Speaker" || *c.DeviceClass != "audio" || *c.CoD != 2360324 || *c.LastRSSI != -62 {
+		t.Fatalf("classic: %+v", c)
+	}
+
+	b, err := st.GetBTDevice(ctx, storage.BTBLE, band, "random")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 4 + 1 (adv without count) + 0 (device record without count) + 2 (explicit)
+	if b.Observations != 7 || *b.Name != "Band" || *b.Classification != "wearable" || *b.ManufacturerID != 343 {
+		t.Fatalf("ble: %+v", b)
+	}
+	if len(b.Services) != 2 || b.Services[0] != "180f" || b.Services[1] != "fe95" || *b.RSSIAvg != -75 {
+		t.Fatalf("ble services/rssi: %v avg=%v", b.Services, *b.RSSIAvg)
+	}
+
+	// adv×2 + discovered + updated + conn observed + gatt×2 + conn lost (resolved to "random").
+	obs, err := st.ListBTObservations(ctx, storage.BTBLE, band, "random", 50)
+	if err != nil || len(obs) != 8 {
+		t.Fatalf("ble observations: %v %d", err, len(obs))
+	}
+	all, total, _ := st.ListBTDevices(ctx, storage.Page{Limit: 10}, storage.BTDeviceFilter{})
+	if total != 2 || len(all) != 2 {
+		t.Fatalf("devices: %d %+v", total, all)
+	}
+	if _, n, _ := st.ListBTDevices(ctx, storage.Page{Limit: 10}, storage.BTDeviceFilter{Transport: "classic"}); n != 1 {
+		t.Fatalf("classic filter: %d", n)
+	}
+
+	ss, err := st.ListBTStatus(ctx)
+	if err != nil || len(ss) != 1 {
+		t.Fatalf("status: %v %+v", err, ss)
+	}
+	s := ss[0]
+	if *s.Mode != "bluetooth" || *s.State != "scanning_dual" || s.ErrorCount != 2 || *s.LastErrorCode != "scan_stalled" {
+		t.Fatalf("status row: %+v", s)
+	}
+
+	// Wi-Fi state untouched.
+	if _, n, _ := st.ListAccessPoints(ctx, storage.Page{Limit: 10}); n != 0 {
+		t.Fatalf("AP rows: %d", n)
+	}
+	if _, n, _ := st.ListClients(ctx, storage.Page{Limit: 10}, ""); n != 0 {
+		t.Fatalf("client rows: %d", n)
+	}
+}
+
+// Retention: Bluetooth addresses not seen within the window are pruned with
+// their events (rotating BLE addresses must not grow the table forever);
+// recently seen ones and their history stay.
+func TestBluetoothRetention(t *testing.T) {
+	p, st, _ := setup(t)
+	ctx := context.Background()
+	now := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
+	p.now = func() time.Time { return now.AddDate(0, 0, -10) }
+	feed(t, p, bt(t, 0, events.TypeBtBleAdvObserved, `{"address":"02:00:00:00:00:01","address_type":"random","rssi":-70}`))
+	p.now = func() time.Time { return now }
+	feed(t, p, bt(t, 1, events.TypeBtBleAdvObserved, `{"address":"02:00:00:00:00:02","address_type":"random","rssi":-71}`))
+
+	res, err := st.PruneEvents(ctx, now.AddDate(0, 0, -7).UnixMilli())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Events != 1 || res.BTDevices != 1 {
+		t.Fatalf("prune result: %+v", res)
+	}
+	if _, err := st.GetBTDevice(ctx, storage.BTBLE, "02:00:00:00:00:01", "random"); err != storage.ErrNotFound {
+		t.Fatalf("old address should be pruned: %v", err)
+	}
+	if o, _ := st.ListBTObservations(ctx, storage.BTBLE, "02:00:00:00:00:01", "random", 10); len(o) != 0 {
+		t.Fatalf("old observations should cascade away: %d", len(o))
+	}
+	if o, _ := st.ListBTObservations(ctx, storage.BTBLE, "02:00:00:00:00:02", "random", 10); len(o) != 1 {
+		t.Fatalf("recent observations kept: %d", len(o))
+	}
+}

@@ -11,6 +11,7 @@ type PruneResult struct {
 	Events       int64
 	Observations int64
 	Clients      int64 // client sightings whose last_seen fell before the cutoff
+	BTDevices    int64 // Bluetooth addresses whose last_seen fell before the cutoff
 }
 
 // pruneBatch bounds how many event rows are deleted per statement, so a large
@@ -51,6 +52,16 @@ func (s *Store) PruneEvents(ctx context.Context, cutoff int64) (PruneResult, err
 			if cn, _ := cr.RowsAffected(); cn > 0 {
 				res.Clients += cn
 			}
+			// Bluetooth addresses are sightings too: rotating BLE random
+			// addresses would otherwise grow bt_devices without bound. Their
+			// bt_observations go with the events (ON DELETE CASCADE).
+			br, err := t.tx.ExecContext(ctx, `DELETE FROM bt_devices WHERE last_seen < ?`, cutoff)
+			if err != nil {
+				return err
+			}
+			if bn, _ := br.RowsAffected(); bn > 0 {
+				res.BTDevices += bn
+			}
 			return nil
 		})
 		if err != nil {
@@ -82,7 +93,7 @@ func (s *Store) RunPruner(ctx context.Context, retention, interval time.Duration
 	prune := func() {
 		cutoff := now().Add(-retention).UnixMilli()
 		res, err := s.PruneEvents(ctx, cutoff)
-		if (res.Events > 0 || res.Observations > 0 || res.Clients > 0) && onPrune != nil {
+		if (res.Events > 0 || res.Observations > 0 || res.Clients > 0 || res.BTDevices > 0) && onPrune != nil {
 			onPrune(res)
 		}
 		_ = err // caller logs via onPrune; transient errors retry next tick

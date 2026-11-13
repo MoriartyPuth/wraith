@@ -1,8 +1,8 @@
 # Bluetooth subsystem — architecture and coexistence
 
-Status: **DESIGN + PROTOCOL ONLY.** Protocol v4 and Core validation exist
-([event-protocol.md](event-protocol.md)); no Bluetooth firmware, storage, API
-or dashboard yet. Nothing here is hardware-validated.
+Status: **DESIGN, PROTOCOL AND CORE INVENTORY.** Protocol v4, Core validation
+and the SQLite device inventory exist ([event-protocol.md](event-protocol.md));
+no Bluetooth firmware, API or dashboard yet. Nothing here is hardware-validated.
 
 ## Decision: one board, switch mode (2026-11-13)
 
@@ -66,7 +66,7 @@ byte-for-byte unaffected.
 |-------|------|
 | Firmware | New `bluetooth_*` modules; events go through the existing `transport_send` message buffer; radio-mode switch reuses the host-link command path. `transport`, `host_link`, `system_status` and the LCD task keep running across a mode switch. |
 | Protocol | v4 = v3 + `bluetooth.*` (done) |
-| Core | Generic event storage works today (tested); dedicated device inventory + migration next |
+| Core | `core/internal/bluetooth` + migration `0005_bluetooth` (devices, observations, per-sensor status); one call from ingest |
 | API / WebSocket | New `/api/v1/bluetooth/*` routes on the existing router and host guard; existing hub |
 | Dashboard | New Bluetooth section; Wi-Fi pages untouched |
 

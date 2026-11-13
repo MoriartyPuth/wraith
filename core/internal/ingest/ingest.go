@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/MoriartyPuth/wraith/core/internal/bluetooth"
 	"github.com/MoriartyPuth/wraith/core/internal/capture"
 	"github.com/MoriartyPuth/wraith/core/internal/detection"
 	"github.com/MoriartyPuth/wraith/core/internal/events"
@@ -188,6 +189,13 @@ func (p *Pipeline) Handle(ctx context.Context, ev *events.Event) error {
 			}
 			if c, err := tx.GetClient(ctx, ev.BSSID, m.Client); err == nil {
 				clientRow = &c
+			}
+		}
+		// Bluetooth (protocol v4) has its own inventory, kept apart from the
+		// Wi-Fi state above: internal/bluetooth never touches AP or client rows.
+		if bluetooth.IsBluetooth(ev.Type) {
+			if _, err := bluetooth.Apply(ctx, tx, ev, row, nowMS); err != nil {
+				return err
 			}
 		}
 		raw := p.det.Observe(&detection.Context{Event: ev, PrevAP: prev, CurAP: ap, Lookup: lookup{ctx, tx},
