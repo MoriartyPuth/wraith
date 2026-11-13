@@ -188,7 +188,7 @@ var txSpecs = map[string]typeSpec{
 		{name: "detail", k: kStr, maxLen: 128},
 		{name: "client", k: kMAC},
 	}},
-	TypeTxReport: {needBSSID: true, meta: []field{
+	TypeTxReport: {needBSSID: true, needChannel: true, meta: []field{
 		{name: "command", k: kEnum, req: true, enum: []string{"deauth", "disassoc"}},
 		{name: "client", k: kMAC, req: true},
 		intF("reason", true, 0, 65535),

@@ -258,6 +258,8 @@ static void test_abort_on_host_lost(void)
     CHECK(g_env.n_frames == 1);
     CHECK(strstr(g_env.lines[g_env.n - 1], "\"outcome\":\"aborted_host_lost\"") != NULL);
     CHECK(strstr(g_env.lines[g_env.n - 1], "\"sent\":1,\"requested\":5") != NULL);
+    /* tx.report must always carry the (required) target channel, even on abort. */
+    CHECK(strstr(g_env.lines[g_env.n - 1], "\"channel\":11") != NULL);
     /* Cooldown blocks further bursts even though the host never returned. */
     CHECK(!tx_submit(&(tx_request_t){.kind = TX_KIND_DEAUTH, .bssid = {0x02, 0x11, 0x22, 0x33, 0x44, 0x55},
                                      .client = {0x02, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE},
@@ -275,14 +277,17 @@ static void test_abort_on_radio_error(void)
     CHECK(tx_state() == TX_COOLDOWN);
     CHECK(g_env.n_frames == 1);
     CHECK(strstr(g_env.lines[g_env.n - 1], "\"outcome\":\"aborted_radio\"") != NULL);
+    CHECK(strstr(g_env.lines[g_env.n - 1], "\"channel\":1") != NULL);
 
-    /* Channel set failure aborts before any frame goes out. */
+    /* Channel set failure aborts before any frame goes out; the report still
+     * carries the target channel it tried (and failed) to tune to. */
     env_init();
     g_set_channel_result = -1;
     submit_ok(TX_KIND_DEAUTH, 2, 100, 3);
     CHECK(!tx_tick(1000, true));
     CHECK(g_env.n_frames == 0);
     CHECK(strstr(g_env.lines[g_env.n - 1], "\"outcome\":\"aborted_radio\"") != NULL);
+    CHECK(strstr(g_env.lines[g_env.n - 1], "\"channel\":3") != NULL);
     env_init();
 }
 
@@ -371,4 +376,14 @@ void emit_tx_samples(void)
         fputs(g_env.lines[i], stdout);
     }
     g_send_result = 0;
+
+    /* A burst aborted by the host link dropping: the report must still carry
+     * the (now required) channel, so the Go validator accepts it. */
+    env_init();
+    submit_ok(TX_KIND_DEAUTH, 5, 100, 9);
+    tx_tick(1000, true);  /* first frame out, radio pinned to channel 9 */
+    tx_tick(1200, false); /* pings stopped -> aborted_host_lost */
+    for (size_t i = 0; i < g_env.n; i++) {
+        fputs(g_env.lines[i], stdout);
+    }
 }

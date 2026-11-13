@@ -398,14 +398,16 @@ bool tx_tick(uint32_t now, bool host_connected)
     }
 
     if (!host_connected) {
-        emit_report("aborted_host_lost", -1, now);
+        /* Report the target channel (always known once a burst is active), so
+         * tx.report always carries the required channel field. */
+        emit_report("aborted_host_lost", s_req.channel, now);
         return false;
     }
 
     if (s_sent == 0) {
         /* Pin the radio to the target's channel for the whole burst. */
         if (s_ops->set_channel(s_req.channel) != 0) {
-            emit_report("aborted_radio", -1, now);
+            emit_report("aborted_radio", s_req.channel, now);
             return false;
         }
     } else if ((int32_t)(now - s_next_frame_ms) < 0) {

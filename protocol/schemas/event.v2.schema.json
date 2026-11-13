@@ -40,7 +40,7 @@
     { "if": { "properties": { "event_type": { "const": "tx.ack" } } },
       "then": { "properties": { "metadata": { "$ref": "#/$defs/tx_ack" } } } },
     { "if": { "properties": { "event_type": { "const": "tx.report" } } },
-      "then": { "required": ["bssid"], "properties": { "metadata": { "$ref": "#/$defs/tx_report" } } } },
+      "then": { "required": ["bssid", "channel"], "properties": { "metadata": { "$ref": "#/$defs/tx_report" } } } },
     { "if": { "properties": { "event_type": { "const": "detection.finding" } } },
       "then": { "properties": { "metadata": { "$ref": "#/$defs/finding" } } } },
     { "if": { "properties": { "event_type": { "const": "capture.provider_status" } } },

@@ -56,8 +56,14 @@ static void rx_task(void *arg)
 
 esp_err_t host_link_start(void)
 {
-    /* UART0 driver (with RX buffer) is installed by transport_init(). */
-    if (xTaskCreate(rx_task, "wraith_hostrx", 2560, NULL, 3, NULL) != pdPASS) {
+    /* UART0 driver (with RX buffer) is installed by transport_init().
+     * Pinned to core 1, the same core as the wifi_monitor processing task
+     * that runs tx_tick(): the TX command path (tx_submit/tx_abort) and the
+     * burst state machine share static state, so keeping them on one core
+     * removes cross-core parallel access. proc_task has the higher priority,
+     * and tx_submit publishes TX_ACTIVE only after the request is fully
+     * written, so a same-core preemption cannot observe a half-built target. */
+    if (xTaskCreatePinnedToCore(rx_task, "wraith_hostrx", 2560, NULL, 3, NULL, 1) != pdPASS) {
         ESP_LOGE(TAG, "task create failed");
         return ESP_ERR_NO_MEM;
     }

@@ -226,7 +226,8 @@
       },
       "then": {
         "required": [
-          "bssid"
+          "bssid",
+          "channel"
         ],
         "properties": {
           "metadata": {
