@@ -57,11 +57,37 @@ schema 1–4 → 1–5, every Wi-Fi table's row count unchanged,
 - The dashboard has no DOM test library; logic lives in pure modules so it can
   be unit-tested without adding one.
 
+## Firmware switch mode (BT-5)
+
+- **Wi-Fi builds unchanged, proven.** Before any firmware edit, all 463
+  objects of the default and `tx` builds were fingerprinted (a clean rebuild
+  reproduced every hash). After BT-5, both builds were rebuilt and compared
+  with a build of the previous commit in a separate worktree: all 462 compiled
+  objects are identical in code and data (`objcopy --strip-debug`; only debug
+  line/column records of the three hooked files differ), and the linked
+  `firmware.elf` sections `.iram0.vectors`, `.iram0.text`, `.dram0.data`,
+  `.flash.text`, `.flash.rodata` are identical; `.flash.appdesc` differs by
+  the 3 bytes of the compile time.
+- Host tests (`firmware/test/host/test_bt.c`, second binary at protocol v4,
+  ASan/UBSan): command parsing (MODE vs TX/PING/other input, malformed MODE
+  commands), switch order (Wi-Fi fully stopped before Bluetooth starts and
+  vice versa), idempotent requests, `MODE STATUS`, return to Wi-Fi on host
+  loss and on the session limit (including across the 32-bit millisecond
+  wrap), every failure path (Bluetooth start/stop failure, Wi-Fi stop/start
+  failure with retry), truncation of over-long strings.
+- Every `bluetooth.system.*` line the firmware code emits passes the Go
+  validator with checksums (`scripts/check-protocol.sh`).
+- `pio run -e bt` is part of `scripts/check-all.sh`.
+- Core: `POST /bluetooth/mode` — capability gate, connected-sensor gate,
+  CSRF content-type guard, strict body, command per mode, send failure
+  (`TestBluetoothModeEndpoint`; the gate and guard are mutation-checked).
+
 ## Not tested yet
 
-- Anything on hardware: Bluedroid initialisation, the radio-mode switch,
-  BLE scanning, Classic inquiry, Wi-Fi regression around a mode switch, heap
-  and stack measurements (roadmap BT-5 … BT-12).
+- Anything on hardware: Bluedroid start/stop on the ESP32, the radio-mode
+  switch both ways, repeated switching, heap and stack high-water marks, the
+  Bluetooth build's Wi-Fi capture rate vs the Wi-Fi build (IRAM trade-off),
+  BLE scanning and Classic inquiry (not implemented yet).
 - Live WebSocket updates in the browser with real Bluetooth traffic (the
   stream kinds and throttle are tested in Core; the pages' re-fetch on
   `bt_device` / `bt_status` reuses the existing, tested subscription hook).

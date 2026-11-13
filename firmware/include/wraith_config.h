@@ -72,3 +72,19 @@
 #define WRAITH_LCD_SDA_GPIO 21 /* Arduino-ESP32 Wire default */
 #define WRAITH_LCD_SCL_GPIO 22 /* Arduino-ESP32 Wire default */
 #define WRAITH_LCD_I2C_HZ 100000
+
+/* --- Bluetooth: switch mode (docs/bluetooth/architecture.md) ---
+ * Compiled only into the `bt` PlatformIO env (Bluedroid dual mode). The
+ * single radio runs Wi-Fi OR Bluetooth, never both: switching to Bluetooth
+ * stops and de-initialises Wi-Fi first; switching back reverses it. The
+ * Wi-Fi-only builds compile none of this. */
+#ifndef WRAITH_BT_ENABLED
+#define WRAITH_BT_ENABLED 0
+#endif
+/* Wi-Fi monitoring is the baseline: Bluetooth mode returns to Wi-Fi when the
+ * host link is lost and after this long (0 = no limit). */
+#ifndef WRAITH_BT_SESSION_MAX_MS
+#define WRAITH_BT_SESSION_MAX_MS (15 * 60 * 1000)
+#endif
+/* If Wi-Fi fails to come back after Bluetooth mode, retry this often. */
+#define WRAITH_WIFI_RESTART_RETRY_MS 5000

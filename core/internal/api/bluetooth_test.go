@@ -2,11 +2,15 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/MoriartyPuth/wraith/core/internal/detection"
 	"github.com/MoriartyPuth/wraith/core/internal/events"
@@ -180,4 +184,72 @@ func TestBluetoothEndpointsHostGuard(t *testing.T) {
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("host guard: %d", resp.StatusCode)
 	}
+}
+
+func postMode(t *testing.T, srvURL, ctype, body string) (int, map[string]any) {
+	t.Helper()
+	resp, err := http.Post(srvURL+"/api/v1/bluetooth/mode", ctype, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var out map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	return resp.StatusCode, out
+}
+
+func TestBluetoothModeEndpoint(t *testing.T) {
+	fc := newFakeCommander()
+	srv, st := newTxServer(t, false, fc)
+	const js = "application/json"
+	code := func(ctype, body string, want int, wantErr string) {
+		t.Helper()
+		c, b := postMode(t, srv.URL, ctype, body)
+		if c != want {
+			t.Fatalf("%s: code %d want %d: %v", body, c, want, b)
+		}
+		if wantErr != "" {
+			if e, _ := b["error"].(map[string]any); e == nil || e["code"] != wantErr {
+				t.Fatalf("%s: error %v want %s", body, b, wantErr)
+			}
+		}
+	}
+	// No sensor runs the Bluetooth build yet.
+	code(js, `{"mode":"bluetooth"}`, 409, "radio_switch_unsupported")
+	if fc.sentLine() != "" {
+		t.Fatalf("nothing may be sent to a sensor that cannot switch: %q", fc.sentLine())
+	}
+	if err := st.WithTx(context.Background(), func(tx *storage.Tx) error {
+		if err := tx.TouchSensor(context.Background(), "nano-70b2a8", "wraith-nano", time.Now().UnixMilli()); err != nil {
+			return err
+		}
+		return tx.SensorStatus(context.Background(), "nano-70b2a8", "online", "0.1.0", "esp32dev",
+			[]string{"serial-json", "wifi-2.4ghz", "bluetooth-le", "bluetooth-classic", "radio-switch"}, "b7b70001")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	code(js, `{"mode":"bluetooth"}`, 409, "sensor_not_connected")
+	fc.setRunning()
+
+	// Input validation and the CSRF guard come before anything is sent.
+	code("application/x-www-form-urlencoded", `mode=bluetooth`, 415, "unsupported_media_type")
+	code("text/plain", `{"mode":"bluetooth"}`, 415, "unsupported_media_type")
+	code(js, `{"mode":"BLUETOOTH"}`, 400, "invalid_body")
+	code(js, `{"mode":"bluetooth","force":true}`, 400, "invalid_body")
+	code(js, `not json`, 400, "invalid_body")
+	if fc.sentLine() != "" {
+		t.Fatalf("invalid requests sent %q", fc.sentLine())
+	}
+
+	for mode, line := range map[string]string{"bluetooth": "MODE BLUETOOTH", "wifi": "MODE WIFI", "status": "MODE STATUS"} {
+		c, b := postMode(t, srv.URL, js, `{"mode":"`+mode+`"}`)
+		if c != 202 || fc.sentLine() != line || b["data"].(map[string]any)["command"] != line {
+			t.Fatalf("%s: %d %v sent=%q", mode, c, b, fc.sentLine())
+		}
+	}
+
+	fc.mu.Lock()
+	fc.err = errors.New("write: broken pipe")
+	fc.mu.Unlock()
+	code(js, `{"mode":"wifi"}`, 502, "command_send_failed")
 }

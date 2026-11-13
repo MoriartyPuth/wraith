@@ -29,6 +29,7 @@ func (h *handlers) btRoutes(r chi.Router) {
 	r.Get("/bluetooth/ble/devices/{id}/services", h.btGATT(events.TypeBtGattService))
 	r.Get("/bluetooth/ble/devices/{id}/characteristics", h.btGATT(events.TypeBtGattChar))
 	r.Get("/bluetooth/events", h.btEvents)
+	r.Post("/bluetooth/mode", h.btMode)
 }
 
 // btRecentWindow is what /bluetooth/status counts as "recently seen".
@@ -247,4 +248,78 @@ func (h *handlers) btEvents(w http.ResponseWriter, r *http.Request) {
 	paged(w, r, func(ctx context.Context, p storage.Page) ([]storage.StoredEvent, int, error) {
 		return h.d.Store.ListEvents(ctx, p, f)
 	})
+}
+
+// btModeCommands maps the API's mode to the sensor's host command
+// (firmware/include/radio_mode.h).
+var btModeCommands = map[string]string{"wifi": "MODE WIFI", "bluetooth": "MODE BLUETOOTH", "status": "MODE STATUS"}
+
+// btMode asks a switch-mode sensor to change radio mode. The sensor has one
+// radio: "bluetooth" pauses Wi-Fi monitoring until "wifi" (or the sensor's own
+// fallback on host-link loss / session limit). The sensor answers
+// asynchronously with bluetooth.system.status (or .error) events.
+func (h *handlers) btMode(w http.ResponseWriter, r *http.Request) {
+	// A JSON content type forces a CORS preflight that Core never approves:
+	// cross-site pages cannot switch the radio (same guard as /tx).
+	if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		writeErr(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "Content-Type must be application/json")
+		return
+	}
+	var body struct {
+		Mode string `json:"mode"`
+	}
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid_body", `expected {"mode": "wifi" | "bluetooth" | "status"}`)
+		return
+	}
+	cmd, ok := btModeCommands[body.Mode]
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "invalid_body", `mode must be "wifi", "bluetooth" or "status"`)
+		return
+	}
+	supported, err := h.anySensorHas(r.Context(), "radio-switch")
+	if err != nil {
+		internal(w, h.d.Log, err)
+		return
+	}
+	if !supported {
+		writeErr(w, http.StatusConflict, "radio_switch_unsupported",
+			"no sensor runs the Bluetooth build (capability radio-switch); flash it with: cd firmware && pio run -e bt -t upload")
+		return
+	}
+	if h.captureNotRunning() {
+		writeErr(w, http.StatusConflict, "sensor_not_connected", "no capture provider is connected; the sensor must be online")
+		return
+	}
+	if err := h.d.Capture.SendCommand(cmd); err != nil {
+		h.d.Log.Warn("radio mode command failed", "err", err)
+		writeErr(w, http.StatusBadGateway, "command_send_failed", "the command could not be delivered to the sensor")
+		return
+	}
+	h.d.Log.Info("radio mode requested", "mode", body.Mode)
+	writeJSON(w, http.StatusAccepted, map[string]any{"data": map[string]any{
+		"mode": body.Mode, "command": cmd,
+		"note": "the sensor answers with bluetooth.system.status (see /bluetooth/status); a switch takes about a second",
+	}})
+}
+
+// anySensorHas reports whether any known sensor announced capability c.
+func (h *handlers) anySensorHas(ctx context.Context, c string) (bool, error) {
+	sensors, _, err := h.d.Store.ListSensors(ctx, storage.Page{Limit: 100})
+	if err != nil {
+		return false, err
+	}
+	for _, s := range sensors {
+		var caps []string
+		if len(s.Capabilities) > 0 && json.Unmarshal(s.Capabilities, &caps) == nil {
+			for _, x := range caps {
+				if x == c {
+					return true, nil
+				}
+			}
+		}
+	}
+	return false, nil
 }

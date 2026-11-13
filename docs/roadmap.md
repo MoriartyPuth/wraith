@@ -160,7 +160,7 @@ docs/bluetooth/architecture.md.
 | BT-2 | Core: Bluetooth device inventory, migration `0005_bluetooth`, processor | IMPLEMENTED — TESTED (no hardware involved) |
 | BT-3 | REST `/api/v1/bluetooth/*` + WebSocket kinds, throttled | IMPLEMENTED — TESTED (no hardware involved) |
 | BT-4 | Dashboard Bluetooth section | IMPLEMENTED — TESTED (unit + headless-browser render; no hardware involved) |
-| BT-5 | Firmware: BT build env, Bluedroid init, custom partition, radio-mode switch | NOT IMPLEMENTED |
+| BT-5 | Firmware: BT build env, Bluedroid init, custom partition, radio-mode switch (+ Core `POST /bluetooth/mode`, dashboard control) | IMPLEMENTED — NOT HARDWARE VALIDATED (builds; host-tested; Wi-Fi builds proven byte-identical) |
 | BT-6 | Firmware: BLE passive scan + AD parser (host-tested) | NOT IMPLEMENTED |
 | BT-7 | Firmware: bounded Classic inquiry + CoD/EIR parser | NOT IMPLEMENTED |
 | BT-8 | Firmware: device trackers + v4 event emission | NOT IMPLEMENTED |

@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../services/api";
 import { useApi } from "../../hooks/useApi";
 import { useLiveRefresh } from "../../services/live";
-import { Async, Badge, PageHeader, Panel, Rssi, Stat, Table, td } from "../../components/ui";
+import { Async, Badge, Button, PageHeader, Panel, Rssi, Stat, Table, td } from "../../components/ui";
 import { RssiHistogram } from "../../components/LazyCharts";
 import { ActiveBadge, BTDeviceLink, TransportBadge } from "../../components/bluetooth/BTBadges";
 import type { BTSensorStatus } from "../../types/api";
@@ -10,6 +11,41 @@ import { coexistence, rssiHistogram, scanStateLabel } from "../../utils/bluetoot
 import { timeAgo } from "../../utils/format";
 
 const HIST_LIMIT = 500;
+
+/** Radio mode switch. Bluetooth mode pauses Wi-Fi monitoring on the sensor,
+ * so it needs an explicit second click that says so. */
+function ModeControl({ s }: { s: BTSensorStatus }) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ t: "good" | "bad"; text: string } | null>(null);
+  const send = (mode: "wifi" | "bluetooth" | "status") => {
+    setBusy(true);
+    setMsg(null);
+    api.btSetMode(mode)
+      .then(() => setMsg({ t: "good", text: mode === "status" ? "Status requested." : `Switch to ${mode === "wifi" ? "Wi-Fi" : "Bluetooth"} requested; the card updates when the sensor confirms.` }))
+      .catch((e: Error) => setMsg({ t: "bad", text: e.message }))
+      .finally(() => { setBusy(false); setConfirming(false); });
+  };
+  return (
+    <div className="mt-3 border-t border-line pt-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {s.mode === "bluetooth" ? (
+          <Button variant="primary" disabled={busy} onClick={() => send("wifi")}>Back to Wi-Fi</Button>
+        ) : confirming ? (
+          <>
+            <span className="text-xs text-warn">Wi-Fi monitoring on {s.sensor_id} pauses until you switch back, the host link drops, or the sensor's Bluetooth session limit ends it.</span>
+            <Button variant="primary" disabled={busy} onClick={() => send("bluetooth")}>Switch to Bluetooth</Button>
+            <Button disabled={busy} onClick={() => setConfirming(false)}>Cancel</Button>
+          </>
+        ) : (
+          <Button disabled={busy} onClick={() => setConfirming(true)}>Switch to Bluetooth…</Button>
+        )}
+        <Button disabled={busy} onClick={() => send("status")} title="Ask the sensor to report its mode">Refresh</Button>
+      </div>
+      {msg && <p role="status" className={`mt-2 text-xs ${msg.t === "bad" ? "text-bad" : "text-ink-2"}`}>{msg.text}</p>}
+    </div>
+  );
+}
 
 function SensorCard({ s }: { s: BTSensorStatus }) {
   const c = coexistence(s);
@@ -31,6 +67,7 @@ function SensorCard({ s }: { s: BTSensorStatus }) {
           Last error <span className="font-mono">{s.last_error_code}</span>: {s.last_error_message} · {timeAgo(s.last_error_at)}
         </div>
       )}
+      <ModeControl s={s} />
     </div>
   );
 }

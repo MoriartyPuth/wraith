@@ -38,7 +38,7 @@ static void rx_task(void *arg)
                     /* Unknown input stays ignored; TX_ commands are parsed
                      * (and, without the build-time gate, rejected) by the
                      * tx_test module. */
-                    tx_command(line, (uint32_t)(esp_timer_get_time() / 1000));
+                    HOST_LINK_COMMAND(line, (uint32_t)(esp_timer_get_time() / 1000));
                 }
                 n = 0;
                 skipping = false;

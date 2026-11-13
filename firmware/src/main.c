@@ -78,5 +78,5 @@ void app_main(void)
     ESP_ERROR_CHECK(system_status_start());
     system_status_set_state(degraded ? SENSOR_DEGRADED : SENSOR_ONLINE,
                             degraded ? "wifi monitor failed to start (see log)" : "monitoring 2.4GHz");
-    ESP_LOGW(TAG, "started");
+    ESP_LOGW(TAG, "started"); WRAITH_BT_POST_BOOT();
 }

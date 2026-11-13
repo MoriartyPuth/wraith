@@ -16,6 +16,9 @@ if command -v pio >/dev/null; then
   # Gated TX build: catches breakage in the STA-mode path, the raw-frame
   # override and the TX flag wiring (docs/tx.md). Never flashes.
   step "firmware: pio run -e tx" bash -c "cd '$root/firmware' && pio run -e tx"
+  # Bluetooth switch-mode build (docs/bluetooth/architecture.md): Bluedroid,
+  # custom partition table, line-neutral Wi-Fi hooks. Never flashes.
+  step "firmware: pio run -e bt" bash -c "cd '$root/firmware' && pio run -e bt"
 else
   echo; echo "== firmware: pio run"; echo "-- SKIPPED (PlatformIO not installed)"
 fi

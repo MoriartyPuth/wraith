@@ -39,3 +39,20 @@ fi
   "$root/firmware/src/lcd_screens.c" \
   -o "$out/test_host"
 "$out/test_host" "$@"
+
+# Bluetooth build modules (switch mode, protocol v4): a separate binary so the
+# v3 tests above stay exactly as they are. --emit output from both binaries
+# goes to the Go validator (scripts/check-protocol.sh).
+"$cc" -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -g \
+  "${san[@]}" \
+  -D WRAITH_HOST_TEST -D WRAITH_PROTOCOL_VERSION=4 \
+  -I "$root/firmware/include" \
+  "$root/firmware/test/host/test_bt.c" \
+  "$root/firmware/src/json_writer.c" \
+  "$root/firmware/src/protocol.c" \
+  "$root/firmware/src/beacon_parser.c" \
+  "$root/firmware/src/frame_parser.c" \
+  "$root/firmware/src/bt_protocol.c" \
+  "$root/firmware/src/radio_mode_core.c" \
+  -o "$out/test_host_bt"
+"$out/test_host_bt" "$@"

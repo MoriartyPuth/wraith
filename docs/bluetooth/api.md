@@ -49,6 +49,28 @@ sensor's inference and comes with `confidence`.
 GATT lists are empty unless an operator ran GATT discovery on that device
 (off by default; a later phase).
 
+## Radio mode (switch-mode sensors)
+
+`POST /api/v1/bluetooth/mode`, body `{"mode": "bluetooth" | "wifi" | "status"}`.
+
+Sends `MODE BLUETOOTH` / `MODE WIFI` / `MODE STATUS` to the sensor. The sensor
+has one radio: **`bluetooth` pauses Wi-Fi monitoring** on it until `wifi`, a
+lost host link, or the sensor's session limit (15 min by default). The answer
+arrives asynchronously as `bluetooth.system.status` (or `.error`) — the
+`bt_status` stream message and `GET /bluetooth/status`.
+
+| Response | When |
+|----------|------|
+| `202` | command sent (`data.command` echoes it) |
+| `400 invalid_body` | anything but exactly `{"mode": ...}` with one of the three values |
+| `415` | not `application/json` — the CSRF guard: cross-site pages cannot switch the radio |
+| `409 radio_switch_unsupported` | no sensor announced the `radio-switch` capability (flash `pio run -e bt`) |
+| `409 sensor_not_connected` | no capture provider running |
+| `502 command_send_failed` | the serial write failed |
+
+The dashboard's Bluetooth overview has the control on each sensor card, with a
+confirmation step that states Wi-Fi monitoring will pause.
+
 ## Live stream (WebSocket `/api/v1/ws`)
 
 Two message kinds, alongside the existing ones (docs/protocol.md):

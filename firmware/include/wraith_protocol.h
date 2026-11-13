@@ -104,3 +104,8 @@ size_t proto_client_observed(char *buf, size_t cap, const proto_identity_t *id, 
 
 /* Format a MAC as "AA:BB:CC:DD:EE:FF" into out[18]. */
 void proto_format_mac(char out[18], const uint8_t mac[6]);
+
+/* Bluetooth (protocol v4; docs/bluetooth/event-protocol.md). Emitted only by
+ * the Bluetooth build, which sets WRAITH_PROTOCOL_VERSION=4. */
+#define EVT_BT_SYSTEM_STATUS "bluetooth.system.status"
+#define EVT_BT_SYSTEM_ERROR "bluetooth.system.error"

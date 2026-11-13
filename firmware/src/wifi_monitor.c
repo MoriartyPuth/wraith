@@ -189,7 +189,7 @@ static void proc_task(void *arg)
     uint32_t next_stats = now_ms() + 5000;
     uint32_t next_disp = now_ms() + 1000;
     bool tx_was_active = false;
-    for (;;) {
+    for (; WIFI_MON_PROC_CONTINUE();) {
         uint32_t now = now_ms();
         int32_t wait = (int32_t)(next_tick - now);
         if ((int32_t)(next_hop - now) < wait) {
@@ -231,7 +231,7 @@ static void proc_task(void *arg)
             update_stats_message();
             next_stats = now + WRAITH_STATS_INTERVAL_MS;
         }
-    }
+    } WIFI_MON_PROC_EXIT();
 }
 
 esp_err_t wifi_monitor_init(void)
@@ -280,7 +280,7 @@ esp_err_t wifi_monitor_start(void)
     ESP_RETURN_ON_ERROR(esp_wifi_set_promiscuous_filter(&filter), TAG, "filter");
     ESP_RETURN_ON_ERROR(esp_wifi_set_promiscuous_rx_cb(rx_cb), TAG, "rx_cb");
     ESP_RETURN_ON_ERROR(esp_wifi_set_promiscuous(true), TAG, "promiscuous");
-    /* Pinned to the APP core; the Wi-Fi driver runs on the PRO core. */
+    WIFI_MON_PROC_ARM(); /* Pinned to the APP core; the Wi-Fi driver runs on the PRO core. */
     if (xTaskCreatePinnedToCore(proc_task, "wraith_proc", 8192, NULL, 6, NULL, 1) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
@@ -302,3 +302,51 @@ void wifi_monitor_display(uint32_t *aps, int *best_rssi)
     *aps = __atomic_load_n(&s_disp_aps, __ATOMIC_RELAXED);
     *best_rssi = __atomic_load_n(&s_disp_best, __ATOMIC_RELAXED);
 }
+
+#if WRAITH_BT_ENABLED
+/* --- Switch mode (Bluetooth build only) ---
+ * Appended after every existing line on purpose: nothing above moves, so the
+ * Wi-Fi-only builds compile to byte-identical objects (see wifi_monitor.h). */
+volatile int wraith_wifi_stop_req;
+static volatile int s_proc_running;
+
+void wifi_monitor_proc_arm(void)
+{
+    __atomic_store_n(&wraith_wifi_stop_req, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_proc_running, 1, __ATOMIC_RELEASE);
+}
+
+void wifi_monitor_proc_exited(void)
+{
+    __atomic_store_n(&s_proc_running, 0, __ATOMIC_RELEASE);
+    vTaskDelete(NULL);
+}
+
+esp_err_t wifi_monitor_stop(void)
+{
+    /* The processing task wakes at least every 100 ms (tracker tick) and
+     * exits between frames, never mid-parse or mid-emit. */
+    __atomic_store_n(&wraith_wifi_stop_req, 1, __ATOMIC_RELEASE);
+    for (int i = 0; i < 50 && __atomic_load_n(&s_proc_running, __ATOMIC_ACQUIRE); i++) {
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+    if (__atomic_load_n(&s_proc_running, __ATOMIC_ACQUIRE)) {
+        ESP_LOGE(TAG, "stop: processing task did not exit");
+        return ESP_ERR_TIMEOUT;
+    }
+    esp_wifi_set_promiscuous(false);
+    esp_err_t err = esp_wifi_stop();
+    if (err == ESP_OK) {
+        err = esp_wifi_deinit(); /* frees the driver's memory for Bluetooth */
+    }
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "stop: %s", esp_err_to_name(err));
+        return err;
+    }
+    /* No callback can run once the driver is stopped. */
+    vRingbufferDelete(s_ring);
+    s_ring = NULL;
+    s_current_channel = 0; /* heartbeats omit the channel while Wi-Fi is down */
+    return ESP_OK;
+}
+#endif /* WRAITH_BT_ENABLED */

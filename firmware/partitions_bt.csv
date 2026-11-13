@@ -1,0 +1,7 @@
+# Bluetooth build (env:bt). Same nvs/phy_init offsets as ESP-IDF's
+# single-app table used by the Wi-Fi builds, so switching builds never moves
+# stored data; the factory app grows from 1 MB to 3 MB for Bluedroid.
+# Name,   Type, SubType, Offset,  Size
+nvs,      data, nvs,     0x9000,  0x6000,
+phy_init, data, phy,     0xf000,  0x1000,
+factory,  app,  factory, 0x10000, 0x300000,

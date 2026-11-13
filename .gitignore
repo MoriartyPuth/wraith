@@ -3,6 +3,7 @@ firmware/.pio/
 firmware/sdkconfig
 firmware/sdkconfig.*
 !firmware/sdkconfig.defaults
+!firmware/sdkconfig.*.defaults
 firmware/managed_components/
 firmware/dependencies.lock
 

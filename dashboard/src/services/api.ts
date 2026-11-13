@@ -158,6 +158,17 @@ export const api = {
     isDemo() ? resolve(paged(demoEvents(q).filter((e) => e.event_type.startsWith("bluetooth.")), limit, offset))
       : get<Paged<StoredEvent>>(`/bluetooth/events?${page(limit, offset)}${eventQuery({ ...q, bssid: undefined })}`, s),
 
+  /** Ask a switch-mode sensor to change radio mode (docs/bluetooth/api.md).
+   * "bluetooth" pauses Wi-Fi monitoring on that sensor. */
+  btSetMode: (mode: "wifi" | "bluetooth" | "status") => {
+    if (isDemo()) {
+      return Promise.reject(new ApiError(503, "demo", "switching the radio is not available in demo mode"));
+    }
+    return request<One<{ mode: string; command: string; note: string }>>("/bluetooth/mode", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }),
+    });
+  },
+
   // Deauth test transmission (docs/tx.md). Only offered when Core exposes
   // it (system info tx_enabled); demo mode answers 503 to keep the UI honest.
   sendTx: (body: TxRequest) => {
