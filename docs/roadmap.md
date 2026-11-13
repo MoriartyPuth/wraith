@@ -158,7 +158,7 @@ docs/bluetooth/architecture.md.
 |-------|------|--------|
 | BT-1 | Protocol v4: `bluetooth.*` types, Go validator, v4 JSON schema, fixtures, generic ingest | IMPLEMENTED — TESTED (no hardware involved) |
 | BT-2 | Core: Bluetooth device inventory, migration `0005_bluetooth`, processor | IMPLEMENTED — TESTED (no hardware involved) |
-| BT-3 | REST `/api/v1/bluetooth/*` + WebSocket kinds, throttled | NOT IMPLEMENTED |
+| BT-3 | REST `/api/v1/bluetooth/*` + WebSocket kinds, throttled | IMPLEMENTED — TESTED (no hardware involved) |
 | BT-4 | Dashboard Bluetooth section | NOT IMPLEMENTED |
 | BT-5 | Firmware: BT build env, Bluedroid init, custom partition, radio-mode switch | NOT IMPLEMENTED |
 | BT-6 | Firmware: BLE passive scan + AD parser (host-tested) | NOT IMPLEMENTED |

@@ -43,14 +43,20 @@ type Pipeline struct {
 	seqs  *transport.SeqTracker
 	now   func() time.Time
 	start time.Time
+	bt    *bluetooth.Throttle // live-stream limit for bt_device updates
 
 	Ingested, Duplicates, Gaps, Restarts, Failures, Deduped atomic.Uint64
 }
 
 // New creates a pipeline. pub may be nil.
 func New(store *storage.Store, det *detection.Engine, pub Publisher, log *slog.Logger) *Pipeline {
-	return &Pipeline{store: store, det: det, pub: pub, log: log, seqs: transport.NewSeqTracker(4096), now: time.Now, start: time.Now()}
+	return &Pipeline{store: store, det: det, pub: pub, log: log, seqs: transport.NewSeqTracker(4096), now: time.Now, start: time.Now(),
+		bt: bluetooth.NewThrottle()}
 }
+
+// BTStreamSuppressed is how many Bluetooth device updates were stored but not
+// pushed live because of the stream throttle.
+func (p *Pipeline) BTStreamSuppressed() uint64 { return p.bt.Suppressed() }
 
 // Run consumes events until in is closed or ctx is done.
 func (p *Pipeline) Run(ctx context.Context, in <-chan capture.WirelessEvent) {
@@ -133,6 +139,7 @@ func (p *Pipeline) Handle(ctx context.Context, ev *events.Event) error {
 		stored    storage.StoredEvent
 		ap        *storage.AccessPoint
 		clientRow *storage.Client
+		btDev     *storage.BTDevice
 		findings  []storage.Finding
 		dup       bool
 	)
@@ -194,7 +201,7 @@ func (p *Pipeline) Handle(ctx context.Context, ev *events.Event) error {
 		// Bluetooth (protocol v4) has its own inventory, kept apart from the
 		// Wi-Fi state above: internal/bluetooth never touches AP or client rows.
 		if bluetooth.IsBluetooth(ev.Type) {
-			if _, err := bluetooth.Apply(ctx, tx, ev, row, nowMS); err != nil {
+			if btDev, err = bluetooth.Apply(ctx, tx, ev, row, nowMS); err != nil {
 				return err
 			}
 		}
@@ -241,7 +248,20 @@ func (p *Pipeline) Handle(ctx context.Context, ev *events.Event) error {
 	}
 	p.Ingested.Add(1)
 
-	p.publish(stream.KindEvent, stored)
+	// Raw advertisement reports are the highest-rate Bluetooth events; they
+	// reach the dashboard as throttled bt_device updates instead, so they
+	// cannot crowd Wi-Fi messages out of a client's stream queue.
+	if ev.Type != events.TypeBtBleAdvObserved {
+		p.publish(stream.KindEvent, stored)
+	}
+	if btDev != nil && p.bt.Allow(btDev.ID, now) {
+		p.publish(stream.KindBTDevice, btDev)
+	}
+	if ev.Type == events.TypeBtSystemStatus || ev.Type == events.TypeBtSystemError {
+		if s, err := p.store.GetBTStatus(ctx, ev.SensorID); err == nil {
+			p.publish(stream.KindBTStatus, s)
+		}
+	}
 	if ap != nil {
 		p.publish(stream.KindAP, ap)
 	}

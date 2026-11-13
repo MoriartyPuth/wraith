@@ -276,12 +276,14 @@ Core rejects invalid events with a reason (`unsupported_version`,
 | type | data |
 |------|------|
 | `hello` | `{"protocol": N}` on connect, where `N` is Core's newest protocol version (currently 4) |
-| `event` | stored event row (`id`, `event_id`, `event_type`, `payload`, …), after commit |
+| `event` | stored event row (`id`, `event_id`, `event_type`, `payload`, …), after commit; `bluetooth.ble.advertisement_observed` is not streamed raw (see `bt_device`) |
 | `access_point` | AP inventory row after an AP-related event |
 | `client` | client sighting row after a `wifi.client_observed` event (v3) |
 | `finding` | new detection finding |
 | `sensor` | sensor row after heartbeat/status/restart |
 | `provider` | capture provider status change |
+| `bt_device` | Bluetooth device row after a device event, throttled (v4; docs/bluetooth/api.md) |
+| `bt_status` | sensor's Bluetooth subsystem state after `bluetooth.system.status`/`.error` (v4) |
 
 Clients send nothing (read limit 512 bytes; ping/pong keepalive). A client
 that falls 256 messages behind is disconnected and should reconnect and

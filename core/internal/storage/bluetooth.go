@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 )
 
 // Bluetooth transports (bt_devices.transport).
@@ -17,6 +18,7 @@ const (
 // sensor never reported stay nil — the dashboard shows them as unavailable,
 // never as guessed values.
 type BTDevice struct {
+	ID             string   `json:"id"` // BTDeviceID(transport, address_type, address)
 	Transport      string   `json:"transport"`
 	Address        string   `json:"address"`
 	AddressType    string   `json:"address_type"` // "" for Classic
@@ -34,6 +36,29 @@ type BTDevice struct {
 	FirstSeen      int64    `json:"first_seen"`
 	LastSeen       int64    `json:"last_seen"`
 	LastSensor     *string  `json:"last_sensor"`
+}
+
+// BTDeviceID is the stable, URL-safe identifier of a device row:
+// "classic:AA:BB:CC:DD:EE:FF" or "ble:<public|random>:AA:BB:CC:DD:EE:FF".
+func BTDeviceID(transport, addrType, address string) string {
+	if transport == BTClassic {
+		return BTClassic + ":" + address
+	}
+	return transport + ":" + addrType + ":" + address
+}
+
+// ParseBTDeviceID splits an id from BTDeviceID. It checks the shape only;
+// callers validate the address format.
+func ParseBTDeviceID(id string) (transport, addrType, address string, ok bool) {
+	switch {
+	case strings.HasPrefix(id, BTClassic+":"):
+		return BTClassic, "", strings.TrimPrefix(id, BTClassic+":"), true
+	case strings.HasPrefix(id, BTBLE+":public:"):
+		return BTBLE, "public", strings.TrimPrefix(id, BTBLE+":public:"), true
+	case strings.HasPrefix(id, BTBLE+":random:"):
+		return BTBLE, "random", strings.TrimPrefix(id, BTBLE+":random:"), true
+	}
+	return "", "", "", false
 }
 
 // BTObservation is a row of bt_observations.
@@ -76,6 +101,7 @@ func scanBTDevice(sc interface{ Scan(...any) error }) (BTDevice, error) {
 	if err != nil {
 		return d, err
 	}
+	d.ID = BTDeviceID(d.Transport, d.AddressType, d.Address)
 	d.Services = []string{}
 	if services != "" {
 		if err := json.Unmarshal([]byte(services), &d.Services); err != nil {
@@ -273,4 +299,52 @@ func (t *Tx) LatestBLEAddressType(ctx context.Context, address string) (string, 
 		return "", nil
 	}
 	return at, err
+}
+
+// GetBTStatus returns one sensor's Bluetooth subsystem state.
+func (s *Store) GetBTStatus(ctx context.Context, sensorID string) (BTSensorStatus, error) {
+	var b BTSensorStatus
+	err := s.db.QueryRowContext(ctx, `SELECT sensor_id, mode, state, classic_devices, ble_devices,
+		message, updated_at, error_count, last_error_code, last_error_message, last_error_at
+		FROM bt_sensor_status WHERE sensor_id = ?`, sensorID).Scan(&b.SensorID, &b.Mode, &b.State,
+		&b.ClassicDevices, &b.BLEDevices, &b.Message, &b.UpdatedAt, &b.ErrorCount,
+		&b.LastErrorCode, &b.LastErrorMessage, &b.LastErrorAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return b, ErrNotFound
+	}
+	return b, err
+}
+
+// ListBTDeviceEvents returns the stored events linked to one device through
+// bt_observations, newest first, optionally limited to some event types.
+func (s *Store) ListBTDeviceEvents(ctx context.Context, p Page, transport, address, addrType string, types []string) ([]StoredEvent, int, error) {
+	where := ` FROM events e JOIN bt_observations o ON o.event_row = e.id
+		WHERE o.transport = ? AND o.address = ? AND o.address_type = ?`
+	args := []any{transport, address, addrType}
+	if len(types) > 0 {
+		where += " AND e.event_type IN (?" + strings.Repeat(",?", len(types)-1) + ")"
+		for _, t := range types {
+			args = append(args, t)
+		}
+	}
+	var total int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*)`+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	cols := "e." + strings.ReplaceAll(eventCols, ", ", ", e.")
+	rows, err := s.db.QueryContext(ctx, `SELECT `+cols+where+` ORDER BY e.id DESC LIMIT ? OFFSET ?`,
+		append(args, p.Limit, p.Offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	out := []StoredEvent{}
+	for rows.Next() {
+		e, err := scanEvent(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		out = append(out, e)
+	}
+	return out, total, rows.Err()
 }

@@ -90,6 +90,7 @@ func Merge(prev *storage.BTDevice, s Sighting) storage.BTDevice {
 		sensor := s.Sensor
 		d.LastSensor = &sensor
 	}
+	d.ID = storage.BTDeviceID(d.Transport, d.AddressType, d.Address)
 	return d
 }
 

@@ -117,6 +117,7 @@ func (h *handlers) routes(r chi.Router) {
 		r.Get("/statistics", h.statistics)
 		r.Post("/tx", h.txSend)
 		r.Post("/tx/stop", h.txStop)
+		h.btRoutes(r)
 	}
 }
 

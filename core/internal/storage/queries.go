@@ -127,8 +127,11 @@ type EventFilter struct {
 	Types    []string
 	BSSID    string
 	SensorID string
-	Since    int64 // received_at >= Since (ms)
-	Until    int64 // received_at <  Until (ms)
+	// TypePrefix restricts to event types starting with it (e.g.
+	// "bluetooth."). Written as a range so idx_events_type is used.
+	TypePrefix string
+	Since      int64 // received_at >= Since (ms)
+	Until      int64 // received_at <  Until (ms)
 }
 
 func (f EventFilter) where() (string, []any) {
@@ -155,6 +158,12 @@ func (f EventFilter) where() (string, []any) {
 	}
 	if f.SensorID != "" {
 		conds, args = append(conds, "sensor_id = ?"), append(args, f.SensorID)
+	}
+	if p := f.TypePrefix; p != "" {
+		// [p, p with its last byte incremented) — every string with prefix p.
+		upper := p[:len(p)-1] + string(p[len(p)-1]+1)
+		conds = append(conds, "event_type >= ? AND event_type < ?")
+		args = append(args, p, upper)
 	}
 	if f.Since > 0 {
 		conds, args = append(conds, "received_at >= ?"), append(args, f.Since)

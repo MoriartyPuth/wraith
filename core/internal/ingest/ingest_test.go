@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MoriartyPuth/wraith/core/internal/bluetooth"
 	"github.com/MoriartyPuth/wraith/core/internal/capture"
 	"github.com/MoriartyPuth/wraith/core/internal/detection"
 	"github.com/MoriartyPuth/wraith/core/internal/events"
@@ -321,7 +322,12 @@ func TestBluetoothEventsStoredWithoutTouchingWifi(t *testing.T) {
 	if _, fs, _ := st.ListFindings(ctx, storage.Page{Limit: 10}); fs != 0 {
 		t.Fatalf("bluetooth events produced %d Wi-Fi findings", fs)
 	}
-	if pub.msgs[stream.KindEvent] != 5 || pub.msgs[stream.KindAP] != 0 || pub.msgs["client"] != 0 {
+	// 5 stored, 4 streamed raw: the advertisement report is pushed only as a
+	// (throttled) bt_device update — see TestBluetoothStreamThrottled. The
+	// classic + BLE device rows each produce one bt_device; status and error
+	// each produce one bt_status. No Wi-Fi stream kinds.
+	if pub.msgs[stream.KindEvent] != 4 || pub.msgs[stream.KindBTDevice] != 2 || pub.msgs[stream.KindBTStatus] != 2 ||
+		pub.msgs[stream.KindAP] != 0 || pub.msgs[stream.KindClient] != 0 {
 		t.Fatalf("published: %v", pub.msgs)
 	}
 	// The sensor is still tracked (seq continuity across the v4 events).
@@ -447,5 +453,39 @@ func TestBluetoothRetention(t *testing.T) {
 	}
 	if o, _ := st.ListBTObservations(ctx, storage.BTBLE, "02:00:00:00:00:02", "random", 10); len(o) != 1 {
 		t.Fatalf("recent observations kept: %d", len(o))
+	}
+}
+
+// Live stream: raw advertisement reports are not pushed (they arrive as
+// throttled bt_device updates), status changes are, and the throttle drops
+// repeated updates for one device within StreamPerDevice.
+func TestBluetoothStreamThrottled(t *testing.T) {
+	p, _, pub := setup(t)
+	t0 := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
+	p.now = func() time.Time { return t0 }
+	adv := func(seq int) *events.Event {
+		return bt(t, seq, events.TypeBtBleAdvObserved, `{"address":"11:22:33:44:55:66","address_type":"random","rssi":-70}`)
+	}
+	feed(t, p, adv(0), adv(1), adv(2))
+	if pub.msgs[stream.KindEvent] != 0 {
+		t.Fatalf("advertisement reports must not be streamed raw: %v", pub.msgs)
+	}
+	if pub.msgs[stream.KindBTDevice] != 1 || p.BTStreamSuppressed() != 2 {
+		t.Fatalf("throttle: %v suppressed=%d", pub.msgs, p.BTStreamSuppressed())
+	}
+	p.now = func() time.Time { return t0.Add(bluetooth.StreamPerDevice) }
+	feed(t, p, adv(3))
+	if pub.msgs[stream.KindBTDevice] != 2 {
+		t.Fatalf("after interval: %v", pub.msgs)
+	}
+	// Device records and status are ordinary events; status goes out as bt_status.
+	feed(t, p,
+		bt(t, 4, events.TypeBtBleDiscovered, `{"address":"02:00:00:00:00:07","address_type":"public"}`),
+		bt(t, 5, events.TypeBtSystemStatus, `{"state":"idle","mode":"wifi"}`))
+	if pub.msgs[stream.KindEvent] != 2 || pub.msgs[stream.KindBTDevice] != 3 || pub.msgs[stream.KindBTStatus] != 1 {
+		t.Fatalf("published: %v", pub.msgs)
+	}
+	if s := pub.last[stream.KindBTStatus].(storage.BTSensorStatus); *s.Mode != "wifi" {
+		t.Fatalf("bt_status payload: %+v", s)
 	}
 }

@@ -37,6 +37,10 @@ const (
 	KindClient   = "client"
 	KindProvider = "provider"
 	KindHello    = "hello"
+	// Bluetooth (protocol v4). bt_device updates are throttled by the
+	// ingest pipeline (internal/bluetooth.Throttle).
+	KindBTDevice = "bt_device"
+	KindBTStatus = "bt_status"
 )
 
 // Message is the wire envelope.
