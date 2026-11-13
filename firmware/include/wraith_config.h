@@ -88,3 +88,14 @@
 #endif
 /* If Wi-Fi fails to come back after Bluetooth mode, retry this often. */
 #define WRAITH_WIFI_RESTART_RETRY_MS 5000
+
+/* Capabilities announced in sensor.status (the protocol allows up to 16).
+ * system_status_add_capability() ignores any beyond this. The Wi-Fi builds
+ * announce at most 7; the Bluetooth build adds three more. */
+#ifndef WRAITH_MAX_CAPS
+#if WRAITH_BT_ENABLED
+#define WRAITH_MAX_CAPS 12
+#else
+#define WRAITH_MAX_CAPS 8
+#endif
+#endif

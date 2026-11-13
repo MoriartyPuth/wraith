@@ -15,7 +15,7 @@
 
 static const char *TAG = "status";
 
-#define MAX_CAPS 8
+#define MAX_CAPS WRAITH_MAX_CAPS
 
 static proto_identity_t s_id;
 static portMUX_TYPE s_lock = portMUX_INITIALIZER_UNLOCKED;

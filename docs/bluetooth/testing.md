@@ -82,12 +82,72 @@ schema 1–4 → 1–5, every Wi-Fi table's row count unchanged,
   CSRF content-type guard, strict body, command per mode, send failure
   (`TestBluetoothModeEndpoint`; the gate and guard are mutation-checked).
 
+## Hardware: switch mode (BT-5, 2026-11-13, nano-70b2a8)
+
+Board ESP32-D0WD-V3 rev 3.1, Core with protocol v4 / schema 5, live 2.4 GHz
+environment (11–13 APs, ~28 clients). Measured through Core's stored events
+(`/api/v1/events`).
+
+**Wi-Fi capture: Bluetooth build (Wi-Fi mode) vs the build it replaced (tx)**
+
+| | tx build (10 min) | bt build, Wi-Fi mode (5 min) |
+|---|---|---|
+| frames received / min | 850 | 920 |
+| Wi-Fi events / min | 101.6 | 109.5 |
+| ring-buffer drops, queue drops | 0, 0 | 0, 0 |
+| sequence gaps | 0 | 0 |
+| free heap | 154.8 KB | **87.2 KB** (flat) |
+
+No capture loss is measurable from the IRAM trade-off (the windows are not
+simultaneous, so the 850 vs 920 difference is the environment, not the
+firmware). The real cost is heap: the reserved Bluetooth controller memory
+takes 67.6 KB in Wi-Fi mode.
+
+**Switching (9 cycles over 3 boots, 20–30 s in Bluetooth each)**
+
+| | result |
+|---|---|
+| Wi-Fi → Bluetooth (command to confirming status) | 1.73–2.42 s |
+| Bluetooth → Wi-Fi | 1.35–1.73 s |
+| first Wi-Fi event after the Wi-Fi command | 1.33–1.54 s |
+| Wi-Fi events while in Bluetooth mode | 0 in every cycle |
+| errors, resets (boot id unchanged) | none |
+| free heap, Bluetooth mode | 117.0–117.7 KB |
+| free heap after returning to Wi-Fi | identical every cycle within a boot (87,092 / 86,840 B): no leak |
+| lowest free heap since boot | 80,192 B (constant across cycles) |
+| radio task stack (runs Bluedroid init/deinit) | ≥ 3,608 of 6,144 B always free |
+
+**Host-link loss.** With the sensor in Bluetooth mode, Core was stopped for
+25 s: the sensor returned to Wi-Fi by itself without a reset, Wi-Fi events
+flowed as soon as Core was back, and Core showed the correct mode with no
+command sent. Events emitted while Core was down are counted as sequence
+gaps (24), as designed.
+
+**Defects found on hardware and fixed (all re-verified on the board):**
+1. `system_status` silently ignored capabilities beyond 8, dropping
+   `radio-switch`, so Core refused mode commands. The limit is now
+   `WRAITH_MAX_CAPS` (8 in the Wi-Fi builds — objects unchanged — 12 in the
+   Bluetooth build), and `radio-switch` is registered first.
+2. Heartbeats kept the last Wi-Fi channel in Bluetooth mode (they read
+   `system_status`' copy). `wifi_monitor_stop()` now clears it.
+3. Core showed a stale mode after a reconnect: the sensor's status about the
+   automatic return to Wi-Fi was emitted while Core was down. The state
+   machine now re-announces the mode on every host (re)connect (host test
+   added and mutation-checked); this also delivers the boot announcement when
+   Core attaches late.
+4. Measurements added to the switch status message: `heap`, `min` (lowest
+   since boot), `stack` (radio task high-water mark).
+
+Not exercised on hardware: the 15-minute session limit (host-tested,
+including the 32-bit millisecond wrap); the LCD in Bluetooth mode (shows the
+Wi-Fi screens with no channel until BT-11).
+
 ## Not tested yet
 
-- Anything on hardware: Bluedroid start/stop on the ESP32, the radio-mode
-  switch both ways, repeated switching, heap and stack high-water marks, the
-  Bluetooth build's Wi-Fi capture rate vs the Wi-Fi build (IRAM trade-off),
-  BLE scanning and Classic inquiry (not implemented yet).
+- BLE scanning and Classic inquiry (not implemented yet: BT-6, BT-7), and
+  therefore Wi-Fi regression with Bluetooth actually scanning.
+- Stack high-water marks of the Bluedroid-internal tasks (only the radio
+  task's is reported).
 - Live WebSocket updates in the browser with real Bluetooth traffic (the
   stream kinds and throttle are tested in Core; the pages' re-fetch on
   `bt_device` / `bt_status` reuses the existing, tested subscription hook).

@@ -346,7 +346,10 @@ esp_err_t wifi_monitor_stop(void)
     /* No callback can run once the driver is stopped. */
     vRingbufferDelete(s_ring);
     s_ring = NULL;
-    s_current_channel = 0; /* heartbeats omit the channel while Wi-Fi is down */
+    /* No Wi-Fi channel while Wi-Fi is down: heartbeats (which read
+     * system_status' copy, set on every hop) and the LCD omit it. */
+    s_current_channel = 0;
+    system_status_set_channel(0);
     return ESP_OK;
 }
 #endif /* WRAITH_BT_ENABLED */

@@ -19,6 +19,7 @@ static uint32_t s_bt_since;
 static bool s_wifi_down;       /* Wi-Fi failed to restart; retrying */
 static uint32_t s_wifi_retry_at;
 static uint32_t s_switches, s_failures;
+static bool s_host_seen; /* host link state at the previous tick */
 
 const char *radio_mode_name(radio_mode_t m) { return m == RADIO_BLUETOOTH ? "bluetooth" : "wifi"; }
 radio_mode_t radio_current(void) { return s_mode; }
@@ -33,6 +34,7 @@ void radio_init(const event_sink_t *sink, const radio_ops_t *ops, uint32_t max_b
     __atomic_store_n(&s_pending, REQ_NONE, __ATOMIC_RELEASE);
     s_max_bt_ms = max_bt_ms;
     s_wifi_down = false;
+    s_host_seen = false;
     s_switches = s_failures = 0;
 }
 
@@ -148,6 +150,14 @@ void radio_tick(uint32_t now, bool host_connected)
     if (s_ops == NULL) {
         return;
     }
+    /* Re-announce the mode whenever the host link comes (back) up: anything
+     * emitted while no host was reading (e.g. the automatic return to Wi-Fi
+     * after host loss, or the boot status) is lost on the wire. */
+    if (host_connected && !s_host_seen) {
+        status(s_mode == RADIO_BLUETOOTH ? "host connected; Bluetooth mode, Wi-Fi monitoring paused"
+                                         : "host connected; Wi-Fi mode");
+    }
+    s_host_seen = host_connected;
     if (s_wifi_down && s_mode == RADIO_WIFI && (int32_t)(now - s_wifi_retry_at) >= 0) {
         if (s_ops->wifi_start() == 0) {
             s_wifi_down = false;

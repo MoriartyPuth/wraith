@@ -34,15 +34,21 @@ static int op_wifi_start(void)
 static int op_bt_start(void) { return bt_manager_start() == ESP_OK ? 0 : -1; }
 static int op_bt_stop(void) { return bt_manager_stop() == ESP_OK ? 0 : -1; }
 
+/* Called on the radio task right after a switch: heap now, the lowest heap
+ * since boot, and the least free stack this task (which runs Bluedroid
+ * init/deinit) has ever had — the hardware measurements for switch mode. */
 static void op_changed(radio_mode_t m, const char *why)
 {
-    char msg[96];
+    char msg[128];
+    unsigned heap = (unsigned)esp_get_free_heap_size();
+    unsigned min_heap = (unsigned)esp_get_minimum_free_heap_size();
+    unsigned stack = (unsigned)uxTaskGetStackHighWaterMark(NULL);
     if (m == RADIO_BLUETOOTH) {
-        snprintf(msg, sizeof msg, "bluetooth mode (Wi-Fi monitoring paused); heap=%u",
-                 (unsigned)esp_get_free_heap_size());
+        snprintf(msg, sizeof msg, "bluetooth mode (Wi-Fi monitoring paused); heap=%u min=%u stack=%u",
+                 heap, min_heap, stack);
     } else {
-        snprintf(msg, sizeof msg, "monitoring 2.4GHz (back from bluetooth: %s); heap=%u", why,
-                 (unsigned)esp_get_free_heap_size());
+        snprintf(msg, sizeof msg, "monitoring 2.4GHz (back from bluetooth: %s); heap=%u min=%u stack=%u", why,
+                 heap, min_heap, stack);
     }
     system_status_set_state(SENSOR_ONLINE, msg);
     ESP_LOGW(TAG, "%s", msg);
@@ -76,9 +82,10 @@ void radio_mode_post_boot(void)
         bt_emit_error(&sink, "radio_task_failed", "switch-mode task could not start; Wi-Fi only");
         return;
     }
+    /* radio-switch first: Core requires it to send MODE commands. */
+    system_status_add_capability("radio-switch");
     system_status_add_capability("bluetooth-classic");
     system_status_add_capability("bluetooth-le");
-    system_status_add_capability("radio-switch");
     system_status_request_announce();
     bt_emit_status(&sink, "idle", "wifi", -1, -1, "Bluetooth build; Wi-Fi mode");
 }

@@ -2,9 +2,10 @@
 
 Status: protocol v4, Core inventory ([event-protocol.md](event-protocol.md)),
 REST/WebSocket API ([api.md](api.md)), dashboard ([dashboard.md](dashboard.md))
-and the firmware **switch-mode foundation** (BT-5, below) exist. BT-5 is built
-and host-tested but **not yet hardware-validated**; Bluetooth scanning itself
-(BLE, Classic) is not implemented yet ([testing.md](testing.md)).
+and the firmware **switch-mode foundation** (BT-5, below) exist. BT-5 is
+**validated on hardware** (9 switch cycles, host-loss fallback, heap and
+stack measured); Bluetooth scanning itself (BLE, Classic) is not implemented
+yet ([testing.md](testing.md)).
 
 ## Decision: one board, switch mode (2026-11-13)
 
@@ -107,12 +108,15 @@ filters the Bluetooth sources out of the Wi-Fi builds.
 - *IRAM.* Wi-Fi + Bluedroid overflow the ESP32's instruction RAM (by 1448
   bytes). The build sets `CONFIG_ESP_WIFI_IRAM_OPT=n` (general Wi-Fi hot
   paths run from flash — ESP-IDF's own default for ESP32+BT+PSRAM); the RX
-  path a sniffer depends on keeps `ESP_WIFI_RX_IRAM_OPT`. Possible effect on
-  Wi-Fi capture rate in this build's Wi-Fi mode: to be measured on hardware.
+  path a sniffer depends on keeps `ESP_WIFI_RX_IRAM_OPT`. Measured on hardware:
+  no capture loss detectable (920 vs 850 frames/min, 0 drops, 0 gaps).
+- *No deauth TX.* The Bluetooth build does not include the gated TX path;
+  flash `pio run -e tx` for TX testing.
 - *Heap.* Bluetooth controller memory is not released at boot (switch mode
   must be able to start it later), so this build's Wi-Fi mode has less free
-  heap than the Wi-Fi build. To be measured on hardware (heartbeat
-  `free_heap`; each switch logs the heap in `sensor.status`).
+  heap than the Wi-Fi build: 87.2 KB vs 154.8 KB measured (lowest since boot
+  80.2 KB). In Bluetooth mode 117 KB is free. Each switch reports `heap`,
+  `min` and the radio task's `stack` in `sensor.status`.
 
 **Not yet:** BLE scanning, Classic inquiry (BT-6, BT-7), so Bluetooth mode
 reports `state: "idle"`; LCD Bluetooth screens (BT-11) — in Bluetooth mode

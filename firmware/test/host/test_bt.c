@@ -155,6 +155,31 @@ static void test_auto_return(void)
     CHECK(radio_current() == RADIO_WIFI && strcmp(g_calls, "") == 0 && g_n == 0);
 }
 
+/* The mode must be re-announced whenever the host link comes (back) up: a
+ * status emitted while Core was disconnected (e.g. the automatic return to
+ * Wi-Fi after host loss) is lost, and Core would keep showing a stale mode. */
+static void test_announce_on_host_connect(void)
+{
+    reset(0);
+    radio_tick(0, false);
+    CHECK(g_n == 0); /* nobody listening: nothing announced */
+    radio_tick(100, true);
+    CHECK(g_n == 1 && strstr(last(), "\"mode\":\"wifi\"") && strstr(last(), "host connected"));
+    radio_tick(200, true);
+    CHECK(g_n == 1); /* only on the rising edge */
+
+    radio_command("MODE BLUETOOTH", 300);
+    radio_tick(300, true);
+    CHECK(radio_current() == RADIO_BLUETOOTH);
+    radio_tick(400, false); /* host lost: back to Wi-Fi (this status is lost on the wire) */
+    CHECK(radio_current() == RADIO_WIFI);
+    int before = g_n;
+    radio_tick(500, false);
+    CHECK(g_n == before);
+    radio_tick(600, true); /* Core is back: it learns the real mode */
+    CHECK(g_n == before + 1 && strstr(last(), "\"mode\":\"wifi\"") && strstr(last(), "host connected"));
+}
+
 static void test_failures_fall_back_to_wifi(void)
 {
     /* Bluetooth fails to start: release it and restart Wi-Fi. */
@@ -253,6 +278,7 @@ int main(int argc, char **argv)
     test_parse();
     test_switch_and_back();
     test_auto_return();
+    test_announce_on_host_connect();
     test_failures_fall_back_to_wifi();
     test_emitters();
     if (failures) {
