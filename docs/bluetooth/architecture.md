@@ -1,9 +1,10 @@
 # Bluetooth subsystem — architecture and coexistence
 
-Status: **DESIGN, PROTOCOL, CORE INVENTORY AND API.** Protocol v4, Core
-validation, the SQLite device inventory ([event-protocol.md](event-protocol.md))
-and the REST/WebSocket API ([api.md](api.md)) exist; no Bluetooth firmware or
-dashboard yet. Nothing here is hardware-validated.
+Status: **EVERYTHING EXCEPT FIRMWARE.** Protocol v4, Core validation, the
+SQLite device inventory ([event-protocol.md](event-protocol.md)), the
+REST/WebSocket API ([api.md](api.md)) and the dashboard
+([dashboard.md](dashboard.md)) exist; the Bluetooth firmware build does not
+yet. Nothing here is hardware-validated ([testing.md](testing.md)).
 
 ## Decision: one board, switch mode (2026-11-13)
 
@@ -69,7 +70,7 @@ byte-for-byte unaffected.
 | Protocol | v4 = v3 + `bluetooth.*` (done) |
 | Core | `core/internal/bluetooth` + migration `0005_bluetooth` (devices, observations, per-sensor status); one call from ingest |
 | API / WebSocket | `/api/v1/bluetooth/*` on the existing router and host guard; `bt_device` (throttled) and `bt_status` on the existing hub ([api.md](api.md)) |
-| Dashboard | New Bluetooth section; Wi-Fi pages untouched |
+| Dashboard | Bluetooth navigation group and pages ([dashboard.md](dashboard.md)); Wi-Fi pages untouched |
 
 Files that must not change for Bluetooth: `wifi_monitor.c`, `beacon_parser.c`,
 `management_monitor.c`, `frame_parser.c`, `ap_tracker.c`, `client_tracker.c`,

@@ -1,8 +1,9 @@
 // Centralized WRAITH Core API client. In demo mode every call is answered
 // from the labelled demo dataset instead of the network.
 import type {
-  AccessPoint, ApiErrorBody, Client, EventQuery, Finding, Health, Observation, One, Paged, ProviderStatus, Sensor,
-  Statistics, StoredEvent, SystemInfo, TxAccepted, TxRequest, WirelessInterface,
+  AccessPoint, ApiErrorBody, BTDevice, BTObservation, BTStatus, BTTransport, Client, EventQuery, Finding, GATTItem, Health,
+  Observation, One, Paged, ProviderStatus, Sensor, Statistics, StoredEvent, SystemInfo, TxAccepted, TxRequest,
+  WirelessInterface,
 } from "../types/api";
 import { isDemo } from "./mode";
 import * as demo from "./demo";
@@ -117,6 +118,45 @@ export const api = {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }),
     });
   },
+
+  // ---- Bluetooth (docs/bluetooth/api.md). Read-only. ----
+  btStatus: (s?: AbortSignal) =>
+    isDemo() ? resolve({ data: demo.btStatus }) : get<One<BTStatus>>("/bluetooth/status", s),
+  btDevices: (q: { transport?: BTTransport; since?: number } = {}, limit?: number, offset?: number, s?: AbortSignal) => {
+    if (isDemo()) {
+      const all = demo.btDevices.filter((d) => (!q.transport || d.transport === q.transport) && (!q.since || d.last_seen >= q.since));
+      return resolve(paged(all, limit, offset));
+    }
+    const p = new URLSearchParams();
+    if (q.transport) p.set("transport", q.transport);
+    if (q.since) p.set("since", String(q.since));
+    const extra = p.toString();
+    return get<Paged<BTDevice>>(`/bluetooth/devices?${page(limit, offset)}${extra ? "&" + extra : ""}`, s);
+  },
+  btDevice: (id: string, s?: AbortSignal) => {
+    if (isDemo()) {
+      const d = demo.btDevices.find((x) => x.id === id);
+      return d ? resolve({ data: d }) : notFound();
+    }
+    return get<One<BTDevice>>(`/bluetooth/devices/${encodeURIComponent(id)}`, s);
+  },
+  btObservations: (id: string, limit = 500, s?: AbortSignal) =>
+    isDemo() ? resolve({ data: demo.btObservations(id).slice(0, limit) })
+      : get<{ data: BTObservation[] }>(`/bluetooth/devices/${encodeURIComponent(id)}/observations?limit=${limit}`, s),
+  btDeviceEvents: (id: string, limit?: number, offset?: number, s?: AbortSignal) => {
+    if (isDemo()) {
+      const d = demo.btDevices.find((x) => x.id === id);
+      const all = d ? demo.events.filter((e) => (e.payload as { metadata?: { address?: string } })?.metadata?.address === d.address) : [];
+      return resolve(paged(all, limit, offset));
+    }
+    return get<Paged<StoredEvent>>(`/bluetooth/devices/${encodeURIComponent(id)}/events?${page(limit, offset)}`, s);
+  },
+  btGATT: (id: string, what: "services" | "characteristics", s?: AbortSignal) =>
+    isDemo() ? resolve({ data: demo.btGATT[id]?.[what] ?? [], truncated: false })
+      : get<{ data: GATTItem[]; truncated: boolean }>(`/bluetooth/ble/devices/${encodeURIComponent(id)}/${what}`, s),
+  btEvents: (q: EventQuery = {}, limit?: number, offset?: number, s?: AbortSignal) =>
+    isDemo() ? resolve(paged(demoEvents(q).filter((e) => e.event_type.startsWith("bluetooth.")), limit, offset))
+      : get<Paged<StoredEvent>>(`/bluetooth/events?${page(limit, offset)}${eventQuery({ ...q, bssid: undefined })}`, s),
 
   // Deauth test transmission (docs/tx.md). Only offered when Core exposes
   // it (system info tx_enabled); demo mode answers 503 to keep the UI honest.

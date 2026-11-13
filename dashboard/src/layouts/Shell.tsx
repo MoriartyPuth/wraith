@@ -20,6 +20,17 @@ export const NAV = [
   { to: "/settings", label: "Settings" },
 ];
 
+// Bluetooth (protocol v4) — its own group so the Wi-Fi navigation is unchanged.
+export const NAV_BT = [
+  { to: "/bluetooth", label: "Overview" },
+  { to: "/bluetooth/classic", label: "Classic" },
+  { to: "/bluetooth/ble", label: "BLE" },
+  { to: "/bluetooth/events", label: "Events" },
+];
+
+const navCls = ({ isActive }: { isActive: boolean }) =>
+  `whitespace-nowrap rounded px-3 py-1.5 text-sm ${isActive ? "bg-raised text-ink" : "text-ink-2 hover:bg-raised/60 hover:text-ink"}`;
+
 function Dot({ tone }: { tone: "good" | "warn" | "bad" | "off" }) {
   const c = { good: "bg-good", warn: "bg-warn", bad: "bg-bad", off: "bg-ink-3" }[tone];
   return <span className={`inline-block h-2 w-2 rounded-full ${c}`} aria-hidden />;
@@ -52,10 +63,15 @@ export function Shell() {
           </div>
           <nav className="flex gap-1 overflow-x-auto px-2 pb-2 md:flex-col md:overflow-visible">
             {NAV.map((n) => (
-              <NavLink key={n.to} to={n.to} end={n.to === "/"}
-                className={({ isActive }) =>
-                  `whitespace-nowrap rounded px-3 py-1.5 text-sm ${isActive ? "bg-raised text-ink" : "text-ink-2 hover:bg-raised/60 hover:text-ink"}`}>
+              <NavLink key={n.to} to={n.to} end={n.to === "/"} className={navCls}>
                 {n.label}
+              </NavLink>
+            ))}
+            <div className="hidden px-3 pb-1 pt-4 text-xs uppercase tracking-wide text-ink-3 md:block" aria-hidden>Bluetooth</div>
+            {NAV_BT.map((n) => (
+              <NavLink key={n.to} to={n.to} end={n.to === "/bluetooth"} className={navCls}
+                aria-label={`Bluetooth ${n.label}`}>
+                <span className="md:hidden">BT </span>{n.label}
               </NavLink>
             ))}
           </nav>

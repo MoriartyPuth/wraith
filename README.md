@@ -22,6 +22,11 @@ A local-first platform for passive Wi-Fi observation and defensive monitoring:
 > headers (never payloads) to list stations seen talking to each AP; the
 > dashboard has a Clients page and each AP page lists its observed clients.
 >
+> **Bluetooth (in progress):** protocol v4, Core inventory, API and dashboard
+> for Bluetooth Classic + BLE are built and tested without hardware; the
+> firmware side (single-board switch mode: Wi-Fi *or* Bluetooth) is next. See
+> [docs/bluetooth/architecture.md](docs/bluetooth/architecture.md).
+>
 > **Optional active feature:** a heavily gated deauth *test* transmission
 > path exists (firmware build flag + Core `-tx` + explicit confirm; see
 > [docs/tx.md](docs/tx.md)). It is off by default everywhere and has been

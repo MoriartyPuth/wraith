@@ -17,6 +17,11 @@ const ChannelAnalysis = lazy(() => import("../pages/ChannelAnalysis"));
 const Sensors = lazy(() => import("../pages/Sensors"));
 const EventHistory = lazy(() => import("../pages/EventHistory"));
 const Settings = lazy(() => import("../pages/Settings"));
+const BluetoothOverview = lazy(() => import("../pages/bluetooth/BluetoothOverview"));
+const ClassicDevices = lazy(() => import("../pages/bluetooth/ClassicDevices"));
+const BLEDevices = lazy(() => import("../pages/bluetooth/BLEDevices"));
+const BluetoothDeviceDetails = lazy(() => import("../pages/bluetooth/BluetoothDeviceDetails"));
+const BluetoothEvents = lazy(() => import("../pages/bluetooth/BluetoothEvents"));
 
 export function App() {
   return (
@@ -36,6 +41,11 @@ export function App() {
             <Route path="sensors" element={<Sensors />} />
             <Route path="history" element={<EventHistory />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="bluetooth" element={<BluetoothOverview />} />
+            <Route path="bluetooth/classic" element={<ClassicDevices />} />
+            <Route path="bluetooth/ble" element={<BLEDevices />} />
+            <Route path="bluetooth/devices/:id" element={<BluetoothDeviceDetails />} />
+            <Route path="bluetooth/events" element={<BluetoothEvents />} />
             <Route path="*" element={<Empty>Page not found.</Empty>} />
           </Route>
         </Routes>

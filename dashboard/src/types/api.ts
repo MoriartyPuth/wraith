@@ -96,7 +96,7 @@ export interface Statistics {
 
 /** Live stream envelope from /api/v1/ws. */
 export interface StreamMessage {
-  type: "hello" | "event" | "access_point" | "client" | "finding" | "sensor" | "provider";
+  type: "hello" | "event" | "access_point" | "client" | "finding" | "sensor" | "provider" | "bt_device" | "bt_status";
   time: number;
   data: unknown;
 }
@@ -111,4 +111,43 @@ export interface RSNInfo {
 
 export interface EventQuery {
   types?: string[]; bssid?: string; sensor?: string; since?: number; until?: number; eventIds?: string[];
+}
+
+// ---- Bluetooth (protocol v4; docs/bluetooth/api.md) ----
+
+export type BTTransport = "classic" | "ble";
+
+/** One observed Bluetooth address. An address is not a physical device: BLE
+ * random addresses rotate and are never merged. null = never reported. */
+export interface BTDevice {
+  id: string; transport: BTTransport; address: string; address_type: "" | "public" | "random";
+  name: string | null;
+  cod: number | null; device_class: string | null; // Classic: decoded from the device's own CoD
+  classification: string | null; confidence: number | null; // BLE: sensor inference
+  manufacturer_id: number | null; tx_power: number | null; services: string[];
+  last_rssi: number | null; rssi_avg: number | null; observations: number;
+  first_seen: number; last_seen: number; last_sensor: string | null;
+}
+
+export interface BTObservation {
+  event_row: number; transport: BTTransport; address: string; address_type: string;
+  event_type: string; rssi: number | null; sensor_id: string; observed_at: number;
+}
+
+export interface BTSensorStatus {
+  sensor_id: string; mode: "wifi" | "bluetooth" | null;
+  state: "idle" | "scanning_ble" | "scanning_classic" | "scanning_dual" | "error" | null;
+  classic_devices: number | null; ble_devices: number | null; message: string | null; updated_at: number | null;
+  error_count: number; last_error_code: string | null; last_error_message: string | null; last_error_at: number | null;
+}
+
+export interface BTStatus {
+  sensors: BTSensorStatus[];
+  devices: { classic: number; ble: number; total: number; recent_classic: number; recent_ble: number; recent_window_ms: number };
+}
+
+/** A GATT service or characteristic found by operator-initiated discovery. */
+export interface GATTItem {
+  uuid: string; service_uuid?: string; handle?: number; start_handle?: number; end_handle?: number;
+  primary?: boolean; properties?: string[]; discovered_at: number; event_id: string;
 }

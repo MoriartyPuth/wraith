@@ -2,7 +2,8 @@
 // prefix and every SSID/explanation is marked "Demo", so demo data can never
 // be mistaken for an observation. Deterministic (seeded PRNG).
 import type {
-  AccessPoint, Client, Finding, Health, Observation, ProviderStatus, Sensor, Statistics, StoredEvent, SystemInfo,
+  AccessPoint, BTDevice, BTObservation, BTStatus, Client, Finding, GATTItem, Health, Observation, ProviderStatus, Sensor,
+  Statistics, StoredEvent, SystemInfo,
 } from "../types/api";
 
 const T0 = Date.now();
@@ -109,7 +110,7 @@ export const sensor: Sensor & { connected: boolean } = {
 
 export const health: Health = { status: "ok", time: T0, checks: { database: "ok" } };
 export const info: SystemInfo = { name: "WRAITH Core", version: "0.1.0-demo", go_version: "—", os: "Demo mode", kernel: "—",
-  hostname: "demo", started_at: T0 - 3600000, uptime_seconds: 3600, schema_version: 2, protocol_version: 2, tx_enabled: false };
+  hostname: "demo", started_at: T0 - 3600000, uptime_seconds: 3600, schema_version: 5, protocol_version: 4, tx_enabled: false };
 export const providers: ProviderStatus[] = [{ name: "esp32-serial", state: "running", message: "Demo data (no device)",
   since: new Date(T0 - 3600000).toISOString(), implemented: true, stats: { lines: events.length, valid: events.length, rejected: 0 } }];
 
@@ -121,3 +122,84 @@ export function statistics(): Statistics {
   return { sensors: 1, access_points: aps.length, events: events.length, findings: findings.length,
     open_findings: findings.filter((f) => f.status === "open").length, aps_by_channel: byCh, events_by_type: byType, runtime: null };
 }
+
+// ---- Bluetooth demo (protocol v4). Switch mode: the demo sensor is back in
+// Wi-Fi mode; these devices are from a Bluetooth session that ended ~5 min ago.
+const BT_END = T0 - 5 * 60_000;
+type BTSpec = Omit<BTDevice, "id" | "first_seen" | "last_seen" | "last_sensor" | "rssi_avg" | "services"> & { services?: string[]; ago: number };
+const BT_SPECS: BTSpec[] = [
+  { transport: "classic", address: "02:DE:B7:00:00:01", address_type: "", name: "Demo-Speaker", cod: 0x240404, device_class: "audio",
+    classification: null, confidence: null, manufacturer_id: null, tx_power: null, last_rssi: -58, observations: 14, ago: 0 },
+  { transport: "classic", address: "02:DE:B7:00:00:02", address_type: "", name: "Demo-Phone", cod: 0x5a020c, device_class: "phone",
+    classification: null, confidence: null, manufacturer_id: null, tx_power: null, last_rssi: -71, observations: 6, ago: 40 },
+  { transport: "classic", address: "02:DE:B7:00:00:03", address_type: "", name: "Demo-Keyboard", cod: 0x000540, device_class: "input",
+    classification: null, confidence: null, manufacturer_id: null, tx_power: null, last_rssi: null, observations: 3, ago: 300 },
+  { transport: "classic", address: "02:DE:B7:00:00:04", address_type: "", name: null, cod: null, device_class: null,
+    classification: null, confidence: null, manufacturer_id: null, tx_power: null, last_rssi: -88, observations: 1, ago: 500 },
+  { transport: "ble", address: "02:DE:B7:00:01:01", address_type: "random", name: "Demo-Band", cod: null, device_class: null,
+    classification: "wearable", confidence: 0.7, manufacturer_id: 0x0157, tx_power: null, services: ["180d", "180f"], last_rssi: -64, observations: 212, ago: 5 },
+  { transport: "ble", address: "02:DE:B7:00:01:02", address_type: "public", name: "Demo-Beacon", cod: null, device_class: null,
+    classification: "beacon", confidence: 0.5, manufacturer_id: 0x004c, tx_power: -12, last_rssi: -82, observations: 480, ago: 2 },
+  { transport: "ble", address: "02:DE:B7:00:01:03", address_type: "random", name: null, cod: null, device_class: null,
+    classification: null, confidence: null, manufacturer_id: null, tx_power: null, last_rssi: -93, observations: 9, ago: 120 },
+  { transport: "ble", address: "02:DE:B7:00:01:04", address_type: "public", name: "Demo-Sensor", cod: null, device_class: null,
+    classification: "sensor", confidence: 0.8, manufacturer_id: 0x0499, tx_power: -4, services: ["181a"], last_rssi: -49, observations: 96, ago: 1 },
+];
+const btId = (s: Pick<BTDevice, "transport" | "address_type" | "address">) =>
+  s.transport === "classic" ? `classic:${s.address}` : `ble:${s.address_type}:${s.address}`;
+
+export const btDevices: BTDevice[] = BT_SPECS.map(({ ago, services, ...s }) => ({
+  ...s, id: btId(s), services: services ?? [], rssi_avg: s.last_rssi === null ? null : s.last_rssi - 1.5,
+  first_seen: BT_END - 20 * 60_000, last_seen: BT_END - ago * 1000, last_sensor: SENSOR,
+})).sort((a, b) => b.last_seen - a.last_seen);
+
+export function btObservations(id: string): BTObservation[] {
+  const d = btDevices.find((x) => x.id === id);
+  if (!d) return [];
+  return Array.from({ length: 40 }, (_, i) => ({
+    event_row: 900000 + i, transport: d.transport, address: d.address, address_type: d.address_type,
+    event_type: d.transport === "classic" ? "bluetooth.classic.device_updated" : "bluetooth.ble.advertisement_observed",
+    rssi: d.last_rssi === null ? null : Math.round(d.last_rssi + Math.sin(i / 5) * 4 + (rnd() * 4 - 2)),
+    sensor_id: SENSOR, observed_at: d.last_seen - i * 25_000,
+  }));
+}
+
+export const btStatus: BTStatus = {
+  sensors: [{ sensor_id: SENSOR, mode: "wifi", state: "idle", classic_devices: 4, ble_devices: 4,
+    message: "Demo: switched back to Wi-Fi mode", updated_at: BT_END, error_count: 1,
+    last_error_code: "inquiry_failed", last_error_message: "Demo: inquiry timed out once", last_error_at: BT_END - 15 * 60_000 }],
+  devices: { classic: 4, ble: 4, total: 8, recent_classic: 0, recent_ble: 0, recent_window_ms: 600_000 },
+};
+
+export const btGATT: Record<string, { services: GATTItem[]; characteristics: GATTItem[] }> = {
+  "ble:public:02:DE:B7:00:01:04": {
+    services: [
+      { uuid: "181a", start_handle: 10, end_handle: 20, primary: true, discovered_at: BT_END - 60_000, event_id: "demo-gatt-1" },
+      { uuid: "180a", start_handle: 1, end_handle: 9, primary: true, discovered_at: BT_END - 60_000, event_id: "demo-gatt-2" },
+    ],
+    characteristics: [
+      { uuid: "2a6e", service_uuid: "181a", handle: 12, properties: ["read", "notify"], discovered_at: BT_END - 59_000, event_id: "demo-gatt-3" },
+      { uuid: "2a29", service_uuid: "180a", handle: 3, properties: ["read"], discovered_at: BT_END - 59_000, event_id: "demo-gatt-4" },
+    ],
+  },
+};
+
+let btSeq = 0;
+const btEv = (type: string, at: number, metadata: Record<string, unknown>): StoredEvent => {
+  const id = 800000 + btSeq++;
+  const event_id = `demob7b7-${id}`;
+  return { id, event_id, sensor_id: SENSOR, source: "wraith-nano", event_type: type, bssid: null, channel: null, sensor_ts: 0,
+    received_at: at, payload: { version: 4, event_id, source: "wraith-nano", sensor_id: SENSOR, event_type: type, timestamp: 0, seq: id, metadata } };
+};
+events.push(
+  btEv("bluetooth.system.status", BT_END - 20 * 60_000, { state: "scanning_dual", mode: "bluetooth", message: "Demo: Bluetooth session started" }),
+  btEv("bluetooth.system.error", BT_END - 15 * 60_000, { code: "inquiry_failed", message: "Demo: inquiry timed out once" }),
+  ...btDevices.map((d) => d.transport === "classic"
+    ? btEv("bluetooth.classic.device_discovered", d.first_seen, { address: d.address, ...(d.name ? { name: d.name } : {}),
+      ...(d.cod !== null ? { cod: d.cod } : {}), ...(d.device_class ? { device_class: d.device_class } : {}), ...(d.last_rssi !== null ? { rssi: d.last_rssi } : {}) })
+    : btEv("bluetooth.ble.device_discovered", d.first_seen, { address: d.address, address_type: d.address_type,
+      ...(d.name ? { name: d.name } : {}), ...(d.classification ? { classification: d.classification, confidence: d.confidence } : {}) })),
+  btEv("bluetooth.ble.gatt_service_discovered", BT_END - 60_000, { address: "02:DE:B7:00:01:04", uuid: "181a", primary: true }),
+  btEv("bluetooth.system.status", BT_END, { state: "idle", mode: "wifi", message: "Demo: switched back to Wi-Fi mode" }),
+);
+events.sort((a, b) => b.received_at - a.received_at);

@@ -1,4 +1,5 @@
-import type { StoredEvent } from "../types/api";
+import type { BTSensorStatus, StoredEvent } from "../types/api";
+import { scanStateLabel, shortUUID, uuidName } from "./bluetooth";
 import { reasonName } from "./reasons";
 
 type Meta = Record<string, unknown>;
@@ -54,6 +55,36 @@ export function describeEvent(e: StoredEvent): string {
       if (num(m.reason) !== undefined) detail.push(`reason ${m.reason} (${reasonName(num(m.reason)!)})`);
       return `${str(m.command) ?? "tx"} burst: ${detail.join(" · ")}`;
     }
+    case "bluetooth.classic.device_discovered":
+    case "bluetooth.classic.device_updated": {
+      const parts = [`Classic ${str(m.name) ?? str(m.address) ?? "?"}`, str(m.device_class) ?? "class not reported"];
+      if (num(m.rssi) !== undefined) parts.push(`${m.rssi} dBm`);
+      return parts.join(" · ");
+    }
+    case "bluetooth.ble.advertisement_observed":
+      return `BLE advertising: ${str(m.name) ?? str(m.address) ?? "?"} (${str(m.address_type) ?? "?"}) · ${num(m.rssi)} dBm · ${num(m.count) ?? 1} report(s)`;
+    case "bluetooth.ble.device_discovered":
+    case "bluetooth.ble.device_updated":
+      return `BLE device ${str(m.name) ?? str(m.address) ?? "?"} (${str(m.address_type) ?? "?"})` +
+        (str(m.classification) ? ` · inferred ${m.classification}` : "");
+    case "bluetooth.ble.connection_observed":
+      return `GATT connection to ${str(m.address) ?? "?"}`;
+    case "bluetooth.ble.connection_lost":
+      return `GATT connection to ${str(m.address) ?? "?"} ended${str(m.reason) ? ` — ${m.reason}` : ""}`;
+    case "bluetooth.ble.gatt_service_discovered": {
+      const u = str(m.uuid) ?? "?";
+      return `GATT service ${uuidName(u) ?? shortUUID(u)} on ${str(m.address) ?? "?"}`;
+    }
+    case "bluetooth.ble.gatt_characteristic_discovered": {
+      const u = str(m.uuid) ?? "?";
+      const props = Array.isArray(m.properties) ? (m.properties as unknown[]).filter((x) => typeof x === "string").join(", ") : "";
+      return `GATT characteristic ${uuidName(u) ?? shortUUID(u)}${props ? ` [${props}]` : ""} on ${str(m.address) ?? "?"}`;
+    }
+    case "bluetooth.system.status":
+      return `Bluetooth ${scanStateLabel((str(m.state) ?? null) as BTSensorStatus["state"])} · radio mode ${str(m.mode) ?? "?"}` +
+        (str(m.message) ? ` — ${m.message}` : "");
+    case "bluetooth.system.error":
+      return `Bluetooth error ${str(m.code) ?? "?"}: ${str(m.message) ?? ""}`;
     default:
       return e.event_type;
   }
