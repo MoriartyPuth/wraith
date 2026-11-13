@@ -142,10 +142,43 @@ Not exercised on hardware: the 15-minute session limit (host-tested,
 including the 32-bit millisecond wrap); the LCD in Bluetooth mode (shows the
 Wi-Fi screens with no channel until BT-11).
 
+## BLE passive scanning (BT-6)
+
+Host (`firmware/test/host/test_ble.c`, ASan/UBSan): parser on real frame
+layouts (iBeacon, Eddystone service data, Nordic UART 128-bit UUID, 32-bit
+UUID), padding, a length past the payload, name precedence, duplicate and
+excess UUIDs, odd-length lists, capped manufacturer data, TX power 0x80,
+NULL/empty input; every prefix of a full payload in an exact-size heap buffer;
+20 000 random payloads. Tracker: discovery and windowed reports, the additive
+count contract (sum of emitted counts = adverts received), address types
+never merged, RSSI clamping, unknown PDU types, sticky classification and
+`device_updated`, a 40-address burst under the serial budget (nothing lost),
+eviction accounting, expiry and rediscovery, flush before stop. Mutation
+checks: parser bounds check, first-advert double count, serial budget,
+address-type merging — each caught. Every BLE event the firmware emits
+passes the Go validator (this caught TX power −128 being out of range; fixed).
+
+**Hardware (2026-11-14, nano-70b2a8, real environment):**
+
+| scan duty | adverts received / 90 s | rate | controller discards, qdrop, deferred, seq gaps |
+|-----------|------------------------|------|------------------------------------------------|
+| 60 % (window 30 of 50 ms) | 230 | 2.56/s | 0, 0, 0, 0 |
+| 100 % (window = interval) | 1 492 | **16.58/s** | 0, 0, 0, 0 |
+
+Partial-duty scanning lost far more than its idle share (6.5× fewer adverts
+for 1.7× less airtime); the default is continuous. In every run the counts
+reconcile exactly: adverts received − qdrop − evicted = the observations
+Core stored (35 = 35, 230 = 230, 1 492 = 1 492). 9–17 addresses per run,
+including Apple (0x004C), Microsoft (0x0006) and Samsung (0x0075)
+manufacturer data and names; free heap while scanning 102 KB; no resets;
+Wi-Fi events: none after the Bluetooth confirmation; Wi-Fi capture resumed
+within ~1.5 s of switching back. No beacon/wearable signal was present, so
+classification was not exercised on hardware (host-tested only).
+
 ## Not tested yet
 
-- BLE scanning and Classic inquiry (not implemented yet: BT-6, BT-7), and
-  therefore Wi-Fi regression with Bluetooth actually scanning.
+- Classic inquiry (BT-7), and BLE + Classic scheduled together.
+- BLE classification on real beacons/wearables (no such device was nearby).
 - Stack high-water marks of the Bluedroid-internal tasks (only the radio
   task's is reported).
 - Live WebSocket updates in the browser with real Bluetooth traffic (the

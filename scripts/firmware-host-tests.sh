@@ -48,6 +48,9 @@ fi
   -D WRAITH_HOST_TEST -D WRAITH_PROTOCOL_VERSION=4 \
   -I "$root/firmware/include" \
   "$root/firmware/test/host/test_bt.c" \
+  "$root/firmware/test/host/test_ble.c" \
+  "$root/firmware/src/ble_parser.c" \
+  "$root/firmware/src/ble_tracker.c" \
   "$root/firmware/src/json_writer.c" \
   "$root/firmware/src/protocol.c" \
   "$root/firmware/src/beacon_parser.c" \

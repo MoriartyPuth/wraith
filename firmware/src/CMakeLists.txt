@@ -7,7 +7,7 @@ if(CONFIG_BT_ENABLED)
     list(APPEND app_requires bt)
 else()
     # The Wi-Fi-only builds compile exactly the sources they always did.
-    list(FILTER app_sources EXCLUDE REGEX "/(bt_protocol|bt_manager|radio_mode|radio_mode_core)\\.c$")
+    list(FILTER app_sources EXCLUDE REGEX "/(bt_protocol|bt_manager|radio_mode|radio_mode_core|ble_parser|ble_tracker|ble_scanner)\\.c$")
 endif()
 
 idf_component_register(

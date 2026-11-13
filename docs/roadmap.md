@@ -161,9 +161,9 @@ docs/bluetooth/architecture.md.
 | BT-3 | REST `/api/v1/bluetooth/*` + WebSocket kinds, throttled | IMPLEMENTED — TESTED (no hardware involved) |
 | BT-4 | Dashboard Bluetooth section | IMPLEMENTED — TESTED (unit + headless-browser render; no hardware involved) |
 | BT-5 | Firmware: BT build env, Bluedroid init, custom partition, radio-mode switch (+ Core `POST /bluetooth/mode`, dashboard control) | IMPLEMENTED — TESTED on hardware 2026-11-13 (9 switch cycles, host-loss fallback, heap/stack measured; Wi-Fi builds proven byte-identical) |
-| BT-6 | Firmware: BLE passive scan + AD parser (host-tested) | NOT IMPLEMENTED |
+| BT-6 | Firmware: BLE passive scan + AD parser + BLE tracker and event emission | IMPLEMENTED — TESTED on hardware 2026-11-14 (counts reconcile exactly; 16.6 adverts/s, 0 loss) |
 | BT-7 | Firmware: bounded Classic inquiry + CoD/EIR parser | NOT IMPLEMENTED |
-| BT-8 | Firmware: device trackers + v4 event emission | NOT IMPLEMENTED |
+| BT-8 | Firmware: device trackers + v4 event emission | BLE done in BT-6; Classic with BT-7 |
 | BT-9 | Optional operator-initiated GATT discovery (off by default) | NOT IMPLEMENTED |
 | BT-10 | Bluetooth detection engine | NOT IMPLEMENTED |
 | BT-11 | LCD Bluetooth screens via the existing LCD task | NOT IMPLEMENTED |

@@ -12,6 +12,9 @@
 
 int failures;
 
+void run_ble_tests(void);
+void emit_ble_samples(void);
+
 /* ---- capture sink ---- */
 #define MAX_LINES 64
 static char g_lines[MAX_LINES][WRAITH_MAX_MESSAGE];
@@ -180,6 +183,42 @@ static void test_announce_on_host_connect(void)
     CHECK(g_n == before + 1 && strstr(last(), "\"mode\":\"wifi\"") && strstr(last(), "host connected"));
 }
 
+static int g_polls;
+static long g_ble = 7;
+static void f_poll(uint32_t now) { g_polls++; }
+static const char *f_state(void) { return "scanning_ble"; }
+static long f_count(void) { return g_ble; }
+
+/* Scanning hooks: polled every tick in Bluetooth mode only; status reports
+ * the scan state and device count, and repeats every 60 s. */
+static void test_scan_hooks(void)
+{
+    radio_ops_t ops = g_ops;
+    ops.bt_poll = f_poll, ops.bt_state = f_state, ops.ble_count = f_count;
+    reset(0);
+    radio_init(&g_sink, &ops, 0);
+    g_polls = 0;
+    radio_tick(0, true);
+    radio_tick(100, true);
+    CHECK(g_polls == 0); /* Wi-Fi mode: never polled */
+    CHECK(strstr(last(), "\"state\":\"idle\"") && !strstr(last(), "ble_devices"));
+    radio_command("MODE BLUETOOTH", 200);
+    radio_tick(200, true);
+    CHECK(strstr(last(), "\"state\":\"scanning_ble\"") && strstr(last(), "\"ble_devices\":7"));
+    int before = g_n;
+    radio_tick(300, true);
+    radio_tick(200 + RADIO_BT_STATUS_INTERVAL_MS - 1, true);
+    CHECK(g_n == before && g_polls >= 2);
+    g_ble = 9;
+    radio_tick(200 + RADIO_BT_STATUS_INTERVAL_MS, true);
+    CHECK(g_n == before + 1 && strstr(last(), "\"ble_devices\":9"));
+    radio_command("MODE WIFI", 70000);
+    radio_tick(70000, true);
+    int polls = g_polls;
+    radio_tick(70100, true);
+    CHECK(g_polls == polls && !strstr(last(), "ble_devices"));
+}
+
 static void test_failures_fall_back_to_wifi(void)
 {
     /* Bluetooth fails to start: release it and restart Wi-Fi. */
@@ -273,14 +312,17 @@ int main(int argc, char **argv)
     proto_identity_init(&g_id, mac, 0xb7b70005u);
     if (argc > 1 && strcmp(argv[1], "--emit") == 0) {
         emit_samples();
+        emit_ble_samples();
         return 0;
     }
     test_parse();
     test_switch_and_back();
     test_auto_return();
     test_announce_on_host_connect();
+    test_scan_hooks();
     test_failures_fall_back_to_wifi();
     test_emitters();
+    run_ble_tests();
     if (failures) {
         fprintf(stderr, "bluetooth host tests: %d FAILED\n", failures);
         return 1;

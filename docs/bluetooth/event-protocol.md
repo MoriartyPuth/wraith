@@ -1,8 +1,9 @@
 # Bluetooth event protocol (protocol v4)
 
-Status: **IMPLEMENTED — TESTED (Core validator, schema, fixtures, ingest,
-device inventory).** No firmware emits these events yet (the Bluetooth
-firmware build is a later phase), so nothing here is hardware-validated.
+Status: **IMPLEMENTED — TESTED.** The Bluetooth firmware build emits
+`bluetooth.system.*` and the BLE events (`device_discovered`,
+`advertisement_observed`, `device_updated`), validated on hardware; Classic
+and GATT events are not emitted yet.
 
 Protocol v4 is v3 plus the `bluetooth.*` event types below. Everything else —
 framing (`<json>\t<crc32>\n`), the 1024-byte line limit, event IDs, sequence

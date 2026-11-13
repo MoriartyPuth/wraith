@@ -12,6 +12,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "ble_scanner.h"
 #include "bt_manager.h"
 #include "bt_protocol.h"
 #include "host_link.h"
@@ -31,8 +32,23 @@ static int op_wifi_start(void)
     }
     return e == ESP_OK ? 0 : -1;
 }
-static int op_bt_start(void) { return bt_manager_start() == ESP_OK ? 0 : -1; }
-static int op_bt_stop(void) { return bt_manager_stop() == ESP_OK ? 0 : -1; }
+static event_sink_t s_sink;
+
+static int op_bt_start(void)
+{
+    if (bt_manager_start() != ESP_OK) {
+        return -1;
+    }
+    if (ble_scanner_start(&s_sink) != ESP_OK) {
+        return -1; /* the state machine tears Bluetooth down and returns to Wi-Fi */
+    }
+    return 0;
+}
+static int op_bt_stop(void)
+{
+    ble_scanner_stop();
+    return bt_manager_stop() == ESP_OK ? 0 : -1;
+}
 
 /* Called on the radio task right after a switch: heap now, the lowest heap
  * since boot, and the least free stack this task (which runs Bluedroid
@@ -56,7 +72,8 @@ static void op_changed(radio_mode_t m, const char *why)
 
 static const radio_ops_t s_ops = {.wifi_stop = op_wifi_stop, .wifi_start = op_wifi_start,
                                   .bt_start = op_bt_start, .bt_stop = op_bt_stop,
-                                  .mode_changed = op_changed};
+                                  .mode_changed = op_changed, .bt_poll = ble_scanner_poll,
+                                  .bt_state = ble_scanner_state, .ble_count = ble_scanner_device_count};
 
 static uint32_t sink_seq(void *ctx) { return transport_next_seq(); }
 static void sink_emit(const char *line, size_t len, void *ctx) { transport_send(line, len); }
@@ -71,15 +88,14 @@ static void radio_task(void *arg)
 
 void radio_mode_post_boot(void)
 {
-    static event_sink_t sink;
-    sink = (event_sink_t){.id = system_status_identity(), .next_seq = sink_seq, .emit = sink_emit};
-    radio_init(&sink, &s_ops, WRAITH_BT_SESSION_MAX_MS);
+    s_sink = (event_sink_t){.id = system_status_identity(), .next_seq = sink_seq, .emit = sink_emit};
+    radio_init(&s_sink, &s_ops, WRAITH_BT_SESSION_MAX_MS);
     /* Pinned with the host RX task (core 1) that calls radio_command(). The
      * switch runs here, never in the RX task. Stack: Bluedroid init/deinit
      * run in this task's context. */
     if (xTaskCreatePinnedToCore(radio_task, "wraith_radio", 6144, NULL, 4, NULL, 1) != pdPASS) {
         ESP_LOGE(TAG, "radio task failed to start: Wi-Fi only");
-        bt_emit_error(&sink, "radio_task_failed", "switch-mode task could not start; Wi-Fi only");
+        bt_emit_error(&s_sink, "radio_task_failed", "switch-mode task could not start; Wi-Fi only");
         return;
     }
     /* radio-switch first: Core requires it to send MODE commands. */
@@ -87,6 +103,6 @@ void radio_mode_post_boot(void)
     system_status_add_capability("bluetooth-classic");
     system_status_add_capability("bluetooth-le");
     system_status_request_announce();
-    bt_emit_status(&sink, "idle", "wifi", -1, -1, "Bluetooth build; Wi-Fi mode");
+    bt_emit_status(&s_sink, "idle", "wifi", -1, -1, "Bluetooth build; Wi-Fi mode");
 }
 #endif /* WRAITH_BT_ENABLED */

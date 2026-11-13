@@ -30,7 +30,15 @@ typedef struct {
     int (*bt_stop)(void);    /* tear down host stack + controller */
     /* Optional: called after every completed transition. */
     void (*mode_changed)(radio_mode_t mode, const char *why);
+    /* Optional, Bluetooth mode only: run scanning work every tick; report
+     * the scan state ("scanning_ble", "idle", ...) and the device count. */
+    void (*bt_poll)(uint32_t now);
+    const char *(*bt_state)(void);
+    long (*ble_count)(void);
 } radio_ops_t;
+
+/* Bluetooth mode re-reports its status (state, device counts) this often. */
+#define RADIO_BT_STATUS_INTERVAL_MS 60000
 
 void radio_init(const event_sink_t *sink, const radio_ops_t *ops, uint32_t max_bt_ms);
 

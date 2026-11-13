@@ -109,3 +109,6 @@ void proto_format_mac(char out[18], const uint8_t mac[6]);
  * the Bluetooth build, which sets WRAITH_PROTOCOL_VERSION=4. */
 #define EVT_BT_SYSTEM_STATUS "bluetooth.system.status"
 #define EVT_BT_SYSTEM_ERROR "bluetooth.system.error"
+#define EVT_BT_BLE_ADV "bluetooth.ble.advertisement_observed"
+#define EVT_BT_BLE_DISCOVERED "bluetooth.ble.device_discovered"
+#define EVT_BT_BLE_UPDATED "bluetooth.ble.device_updated"

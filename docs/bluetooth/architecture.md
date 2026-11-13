@@ -2,10 +2,9 @@
 
 Status: protocol v4, Core inventory ([event-protocol.md](event-protocol.md)),
 REST/WebSocket API ([api.md](api.md)), dashboard ([dashboard.md](dashboard.md))
-and the firmware **switch-mode foundation** (BT-5, below) exist. BT-5 is
-**validated on hardware** (9 switch cycles, host-loss fallback, heap and
-stack measured); Bluetooth scanning itself (BLE, Classic) is not implemented
-yet ([testing.md](testing.md)).
+the firmware **switch-mode foundation** (BT-5) and **passive BLE scanning**
+(BT-6) exist and are **validated on hardware**; Classic inquiry is not
+implemented yet ([testing.md](testing.md)).
 
 ## Decision: one board, switch mode (2026-11-13)
 
@@ -118,9 +117,30 @@ filters the Bluetooth sources out of the Wi-Fi builds.
   80.2 KB). In Bluetooth mode 117 KB is free. Each switch reports `heap`,
   `min` and the radio task's `stack` in `sensor.status`.
 
-**Not yet:** BLE scanning, Classic inquiry (BT-6, BT-7), so Bluetooth mode
-reports `state: "idle"`; LCD Bluetooth screens (BT-11) — in Bluetooth mode
-the LCD still shows the Wi-Fi screens (channel 0).
+## Firmware: passive BLE scanning (BT-6)
+
+In Bluetooth mode the controller scans **passively** — it only listens; it
+never sends scan requests, so the sensor transmits nothing for BLE. Bluetooth
+mode reports `state: "scanning_ble"`.
+
+| Piece | What it does |
+|-------|--------------|
+| `ble_scanner.c` | Passive scan, 50 ms interval, continuous window, duplicate filtering off (every advert counts), bounded 60 s scans restarted by the radio task. The GAP callback only copies results into a 64-slot queue (overflow counted as `qdrop`); controller flow-control discards are counted (`discard`). |
+| `ble_parser.c` | Bounds-checked AD-structure parser: flags, complete/short name, 16/32/128-bit service UUIDs and service data UUIDs (≤ 6, deduplicated), TX power (0x80 = −128 dBm is outside the defined range and treated as not advertised), manufacturer data (company id + ≤ 24 bytes). A length that runs past the payload marks the advert malformed and stops parsing. |
+| `ble_tracker.c` | 64 addresses (≈ 13 KB, allocated only while Bluetooth is up, so Wi-Fi mode keeps its heap). First sighting → `device_discovered` (count 1); later adverts → one `advertisement_observed` per address per 10 s with the count of adverts it represents; addresses silent for 5 min get a final report and are dropped (rediscovered if heard again); when full, the least recently heard address is evicted and its unsent count is reported in the totals (`evicted_counts`). |
+| Serial budget | BLE events are limited to 8/s (burst 16) so a crowded area cannot overrun the 115200-baud link; deferred events go out later, nothing is dropped. |
+| Switch back to Wi-Fi | The scanner flushes pending reports (paced by the budget) before freeing memory, then emits `BLE scan stopped; results=… discard=… qdrop=… evicted_counts=… devices=…` — the totals that reconcile with Core's stored counts. |
+
+**Classification (inferred, conservative).** Only fixed, documented signals:
+an iBeacon frame (company 0x004C, type 0x02, length 0x15) or the Eddystone
+service (0xFEAA) → `beacon` (confidence 0.9); Heart Rate service (0x180D) →
+`wearable` (0.6); HID service (0x1812) → `peripheral` (0.6); Environmental
+Sensing (0x181A) or Health Thermometer (0x1809) → `sensor` (0.6). Anything
+else is left unclassified. A classification never downgrades; a change after
+discovery is sent as `device_updated`.
+
+**Not yet:** Classic inquiry (BT-7); LCD Bluetooth screens (BT-11) — in
+Bluetooth mode the LCD still shows the Wi-Fi screens (no channel).
 
 ## Integration points (no Wi-Fi file changes)
 

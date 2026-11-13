@@ -20,6 +20,7 @@ static bool s_wifi_down;       /* Wi-Fi failed to restart; retrying */
 static uint32_t s_wifi_retry_at;
 static uint32_t s_switches, s_failures;
 static bool s_host_seen; /* host link state at the previous tick */
+static uint32_t s_next_bt_status;
 
 const char *radio_mode_name(radio_mode_t m) { return m == RADIO_BLUETOOTH ? "bluetooth" : "wifi"; }
 radio_mode_t radio_current(void) { return s_mode; }
@@ -43,7 +44,12 @@ static void status(const char *message)
     /* BT-5: Bluetooth is up but nothing scans yet, so the state is "idle";
      * a failed Wi-Fi restart is the one error state. */
     const char *state = s_wifi_down ? "error" : "idle";
-    bt_emit_status(&s_sink, state, radio_mode_name(s_mode), -1, -1, message);
+    long ble = -1;
+    if (s_mode == RADIO_BLUETOOTH) {
+        if (s_ops && s_ops->bt_state) state = s_ops->bt_state();
+        if (s_ops && s_ops->ble_count) ble = s_ops->ble_count();
+    }
+    bt_emit_status(&s_sink, state, radio_mode_name(s_mode), -1, ble, message);
 }
 
 static void fail(const char *code, const char *message)
@@ -85,6 +91,7 @@ static void to_bluetooth(uint32_t now)
     }
     s_mode = RADIO_BLUETOOTH;
     s_bt_since = now;
+    s_next_bt_status = now + RADIO_BT_STATUS_INTERVAL_MS;
     changed("operator");
     status("Bluetooth mode; Wi-Fi monitoring paused");
 }
@@ -177,6 +184,11 @@ void radio_tick(uint32_t now, bool host_connected)
         status(s_mode == RADIO_BLUETOOTH ? "already in Bluetooth mode" : "already in Wi-Fi mode");
     }
     if (s_mode == RADIO_BLUETOOTH) {
+        if (s_ops->bt_poll) s_ops->bt_poll(now);
+        if ((int32_t)(now - s_next_bt_status) >= 0) {
+            s_next_bt_status = now + RADIO_BT_STATUS_INTERVAL_MS;
+            status("Bluetooth mode; Wi-Fi monitoring paused");
+        }
         if (!host_connected) {
             to_wifi(now, "host link lost");
         } else if (s_max_bt_ms > 0 && (uint32_t)(now - s_bt_since) >= s_max_bt_ms) {
