@@ -231,6 +231,9 @@ RSSI below −127, a near-`UINT32_MAX` countdown — this caught an overflow in
 the round-up, fixed), countdown across a timer wrap, best RSSI windowing and
 unknown-RSSI handling. 9 mutation checks, all caught.
 
+**Hardware (2026-11-15):** flashed, Bluetooth mode with Classic inquiry; the
+operator confirmed all four screens render correctly on the 16x2 LCD.
+
 ## Not tested yet
 
 - Classic inquiry with many discoverable devices (only one was present), and

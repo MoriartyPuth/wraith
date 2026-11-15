@@ -158,7 +158,7 @@ Status: **IMPLEMENTED — TESTED on hardware 2026-11-15** (testing.md).
 
 ## LCD in Bluetooth mode (BT-11)
 
-Status: **IMPLEMENTED — host-tested; NOT YET CONFIRMED ON THE DISPLAY.**
+Status: **IMPLEMENTED — TESTED; confirmed on the display 2026-11-15** (BLE + Classic session; operator read all four screens).
 
 While the radio is in Bluetooth mode the 16x2 LCD rotates (4 s each, as in
 Wi-Fi mode) through:
