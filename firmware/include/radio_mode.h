@@ -5,7 +5,11 @@
  *
  * Host commands (one line each, like TX_* commands):
  *   MODE WIFI        return to Wi-Fi monitoring
- *   MODE BLUETOOTH   stop Wi-Fi, start Bluetooth
+ *   MODE BLUETOOTH   stop Wi-Fi, start Bluetooth (BLE passive scan only);
+ *                    in Bluetooth mode: turn Classic inquiry off
+ *   MODE BLUETOOTH CLASSIC
+ *                    the same plus bounded Classic inquiry, which TRANSMITS
+ *                    (classic_tracker.h); in Bluetooth mode: turn it on
  *   MODE STATUS      report the current mode
  * Every command is answered with a bluetooth.system.status event (or a
  * bluetooth.system.error event if it is malformed or a step fails).
@@ -35,6 +39,11 @@ typedef struct {
     void (*bt_poll)(uint32_t now);
     const char *(*bt_state)(void);
     long (*ble_count)(void);
+    /* Optional: switch bounded Classic inquiry on/off (Bluetooth mode only;
+     * it is always off after bt_start) and report the Classic device count.
+     * Without bt_classic, MODE BLUETOOTH CLASSIC is rejected. */
+    int (*bt_classic)(bool on);
+    long (*classic_count)(void);
 } radio_ops_t;
 
 /* Bluetooth mode re-reports its status (state, device counts) this often. */
@@ -52,6 +61,7 @@ bool radio_command(const char *line, uint32_t now);
 void radio_tick(uint32_t now, bool host_connected);
 
 radio_mode_t radio_current(void);
+bool radio_classic_on(void);
 const char *radio_mode_name(radio_mode_t m);
 uint32_t radio_switch_count(void);
 uint32_t radio_failure_count(void);

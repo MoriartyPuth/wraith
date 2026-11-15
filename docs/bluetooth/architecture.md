@@ -3,8 +3,9 @@
 Status: protocol v4, Core inventory ([event-protocol.md](event-protocol.md)),
 REST/WebSocket API ([api.md](api.md)), dashboard ([dashboard.md](dashboard.md))
 the firmware **switch-mode foundation** (BT-5) and **passive BLE scanning**
-(BT-6) exist and are **validated on hardware**; Classic inquiry is not
-implemented yet ([testing.md](testing.md)).
+(BT-6) exist and are **validated on hardware**; bounded **Classic inquiry**
+(BT-7) is implemented and host-tested but **not yet run on hardware**
+([testing.md](testing.md)).
 
 ## Decision: one board, switch mode (2026-11-13)
 
@@ -50,8 +51,11 @@ the way to get simultaneous coverage.
 **BLE passive scanning transmits nothing.** **Bluetooth Classic inquiry does**:
 the inquiring device broadcasts inquiry packets and listens for responses.
 Classic discovery is therefore active (it makes the sensor visible to the
-devices it discovers) and will be bounded, scheduled and individually
-disableable. GATT discovery connects to a device and is operator-initiated
+devices it discovers); it is **off unless the operator asks for it**
+(`MODE BLUETOOTH CLASSIC`), bounded to short slots, and can be turned off
+again without leaving Bluetooth mode (BT-7 below). WRAITH never sends Remote
+Name Requests (pages) — names come only from what devices put in their
+inquiry response. GATT discovery connects to a device and is operator-initiated
 only, off by default. No Bluetooth disruption, pairing, or characteristic
 writes are in scope.
 
@@ -139,7 +143,21 @@ Sensing (0x181A) or Health Thermometer (0x1809) → `sensor` (0.6). Anything
 else is left unclassified. A classification never downgrades; a change after
 discovery is sent as `device_updated`.
 
-**Not yet:** Classic inquiry (BT-7); LCD Bluetooth screens (BT-11) — in
+## Firmware: bounded Classic inquiry (BT-7)
+
+Status: **IMPLEMENTED — host-tested; NOT YET RUN ON HARDWARE.**
+
+| Piece | What it does |
+|-------|--------------|
+| Command | `MODE BLUETOOTH` = BLE passive only (unchanged; turns Classic off if it was on). `MODE BLUETOOTH CLASSIC` = BLE + Classic inquiry; from Wi-Fi it switches and enables in one step, in Bluetooth mode it only enables. Switching back to Wi-Fi always ends it. Capability `classic-inquiry` announces support; Core's `POST /bluetooth/mode` takes `"classic": true`. |
+| Scheduler (`classic_tracker.c`, pure) | Inquiry slots of 6 s every 30 s (20 % of airtime; `WRAITH_CLASSIC_SLOT_MS` / `WRAITH_CLASSIC_PERIOD_MS`). A refused start retries after 5 s. Never starts while the controller still reports an inquiry; re-cancels every second until it stops. |
+| No name paging | `esp_bt_gap_start_discovery` in ESP-IDF follows a *completed* inquiry with a Remote Name Request (a page) to every device whose response had no name. WRAITH starts each inquiry with the controller's maximum length (61 s) and always ends it with its own cancel at the slot end, so the inquiry never completes and that phase is never reached. A name-only result (the sign a page happened) is counted as `rnr` and cancels at once — expected to stay 0. |
+| `classic_scanner.c` | GAP callback copies COD, RSSI and EIR into a 16-slot queue (overflow → `qdrop`). After each slot: `bluetooth.system.status` `classic slot N done; results=… qdrop=… rnr=… evicted_counts=… recancel=…`; on stop: `Classic stopped; slots=… inq_ms=… results=…` — results − qdrop − evicted_counts = the Classic counts Core stored. |
+| `classic_parser.c` | EIR Local Name (Complete preferred over Shortened; cut to 64 bytes on a UTF-8 boundary so an event always fits one line); CoD → `device_class`, the same decoding as Core (shared test vectors). |
+| `classic_tracker.c` | 32 addresses (heap only while Bluetooth is up). First response → `device_discovered` (count 1); later responses → `device_updated` once per 30 s, or at once when the name or CoD changes, always with count ≥ 1; names are sticky. Own serial budget 2 events/s (burst 8), on top of BLE's 8/s. Silent 5 min → final report, dropped. |
+| BLE during inquiry | BLE scanning keeps running; the dual-mode controller time-shares the radio. The cost to BLE (vs the 16.6 adverts/s baseline) is the first hardware measurement to make. State: `scanning_dual`. |
+
+**Not yet:** LCD Bluetooth screens (BT-11) — in
 Bluetooth mode the LCD still shows the Wi-Fi screens (no channel).
 
 ## Integration points (no Wi-Fi file changes)

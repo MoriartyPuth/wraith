@@ -162,8 +162,8 @@ docs/bluetooth/architecture.md.
 | BT-4 | Dashboard Bluetooth section | IMPLEMENTED — TESTED (unit + headless-browser render; no hardware involved) |
 | BT-5 | Firmware: BT build env, Bluedroid init, custom partition, radio-mode switch (+ Core `POST /bluetooth/mode`, dashboard control) | IMPLEMENTED — TESTED on hardware 2026-11-13 (9 switch cycles, host-loss fallback, heap/stack measured; Wi-Fi builds proven byte-identical) |
 | BT-6 | Firmware: BLE passive scan + AD parser + BLE tracker and event emission | IMPLEMENTED — TESTED on hardware 2026-11-14 (counts reconcile exactly; 16.6 adverts/s, 0 loss) |
-| BT-7 | Firmware: bounded Classic inquiry + CoD/EIR parser | NOT IMPLEMENTED |
-| BT-8 | Firmware: device trackers + v4 event emission | BLE done in BT-6; Classic with BT-7 |
+| BT-7 | Firmware: bounded Classic inquiry + CoD/EIR parser (+ `MODE BLUETOOTH CLASSIC`, Core `classic` flag, dashboard control) | IMPLEMENTED — TESTED on host (ASan/UBSan, validator, mutation checks; Wi-Fi builds byte-identical); NOT YET ON HARDWARE |
+| BT-8 | Firmware: device trackers + v4 event emission | IMPLEMENTED — BLE in BT-6 (hardware-validated); Classic tracker with BT-7 (host-tested) |
 | BT-9 | Optional operator-initiated GATT discovery (off by default) | NOT IMPLEMENTED |
 | BT-10 | Bluetooth detection engine | NOT IMPLEMENTED |
 | BT-11 | LCD Bluetooth screens via the existing LCD task | NOT IMPLEMENTED |

@@ -49,6 +49,9 @@ fi
   -I "$root/firmware/include" \
   "$root/firmware/test/host/test_bt.c" \
   "$root/firmware/test/host/test_ble.c" \
+  "$root/firmware/test/host/test_classic.c" \
+  "$root/firmware/src/classic_parser.c" \
+  "$root/firmware/src/classic_tracker.c" \
   "$root/firmware/src/ble_parser.c" \
   "$root/firmware/src/ble_tracker.c" \
   "$root/firmware/src/json_writer.c" \

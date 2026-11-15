@@ -248,6 +248,34 @@ func TestBluetoothModeEndpoint(t *testing.T) {
 		}
 	}
 
+	// Classic inquiry transmits: explicit opt-in, bluetooth mode only, and
+	// only for firmware that announced classic-inquiry (this sensor did not).
+	code(js, `{"mode":"wifi","classic":true}`, 400, "invalid_body")
+	code(js, `{"mode":"status","classic":false}`, 400, "invalid_body")
+	code(js, `{"mode":"bluetooth","classic":"yes"}`, 400, "invalid_body")
+	sent := fc.sentLine()
+	code(js, `{"mode":"bluetooth","classic":true}`, 409, "classic_unsupported")
+	if fc.sentLine() != sent {
+		t.Fatalf("classic request sent to a sensor without classic-inquiry: %q", fc.sentLine())
+	}
+	if err := st.WithTx(context.Background(), func(tx *storage.Tx) error {
+		return tx.SensorStatus(context.Background(), "nano-70b2a8", "online", "0.1.0", "esp32dev",
+			[]string{"serial-json", "wifi-2.4ghz", "radio-switch", "bluetooth-classic", "bluetooth-le", "classic-inquiry"}, "b7b70002")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for body, line := range map[string]string{
+		`{"mode":"bluetooth","classic":true}`:  "MODE BLUETOOTH CLASSIC",
+		`{"mode":"bluetooth","classic":false}`: "MODE BLUETOOTH",
+		`{"mode":"bluetooth"}`:                 "MODE BLUETOOTH",
+	} {
+		c, b := postMode(t, srv.URL, js, body)
+		d, _ := b["data"].(map[string]any)
+		if c != 202 || fc.sentLine() != line || d["command"] != line || d["classic"] != (line == "MODE BLUETOOTH CLASSIC") {
+			t.Fatalf("%s: %d %v sent=%q", body, c, b, fc.sentLine())
+		}
+	}
+
 	fc.mu.Lock()
 	fc.err = errors.New("write: broken pipe")
 	fc.mu.Unlock()

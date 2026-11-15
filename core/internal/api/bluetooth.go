@@ -254,10 +254,19 @@ func (h *handlers) btEvents(w http.ResponseWriter, r *http.Request) {
 // (firmware/include/radio_mode.h).
 var btModeCommands = map[string]string{"wifi": "MODE WIFI", "bluetooth": "MODE BLUETOOTH", "status": "MODE STATUS"}
 
+// btClassicCommand is "bluetooth" with Classic inquiry on. Inquiry transmits,
+// so it is only ever sent when the request asks for it explicitly.
+const btClassicCommand = "MODE BLUETOOTH CLASSIC"
+
 // btMode asks a switch-mode sensor to change radio mode. The sensor has one
 // radio: "bluetooth" pauses Wi-Fi monitoring until "wifi" (or the sensor's own
 // fallback on host-link loss / session limit). The sensor answers
 // asynchronously with bluetooth.system.status (or .error) events.
+//
+// {"mode":"bluetooth"} is BLE passive scanning only (and turns Classic
+// inquiry off if it was on); {"mode":"bluetooth","classic":true} adds bounded
+// Classic inquiry, which transmits — only sensors announcing the
+// classic-inquiry capability accept it.
 func (h *handlers) btMode(w http.ResponseWriter, r *http.Request) {
 	// A JSON content type forces a CORS preflight that Core never approves:
 	// cross-site pages cannot switch the radio (same guard as /tx).
@@ -266,18 +275,27 @@ func (h *handlers) btMode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Mode string `json:"mode"`
+		Mode    string `json:"mode"`
+		Classic *bool  `json:"classic"`
 	}
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&body); err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid_body", `expected {"mode": "wifi" | "bluetooth" | "status"}`)
+		writeErr(w, http.StatusBadRequest, "invalid_body", `expected {"mode": "wifi" | "bluetooth" | "status", "classic"?: bool}`)
 		return
 	}
 	cmd, ok := btModeCommands[body.Mode]
 	if !ok {
 		writeErr(w, http.StatusBadRequest, "invalid_body", `mode must be "wifi", "bluetooth" or "status"`)
 		return
+	}
+	classic := body.Classic != nil && *body.Classic
+	if body.Classic != nil && body.Mode != "bluetooth" {
+		writeErr(w, http.StatusBadRequest, "invalid_body", `"classic" only applies to mode "bluetooth"`)
+		return
+	}
+	if classic {
+		cmd = btClassicCommand
 	}
 	supported, err := h.anySensorHas(r.Context(), "radio-switch")
 	if err != nil {
@@ -289,6 +307,18 @@ func (h *handlers) btMode(w http.ResponseWriter, r *http.Request) {
 			"no sensor runs the Bluetooth build (capability radio-switch); flash it with: cd firmware && pio run -e bt -t upload")
 		return
 	}
+	if classic {
+		ok, err := h.anySensorHas(r.Context(), "classic-inquiry")
+		if err != nil {
+			internal(w, h.d.Log, err)
+			return
+		}
+		if !ok {
+			writeErr(w, http.StatusConflict, "classic_unsupported",
+				"the sensor firmware has no Classic inquiry (capability classic-inquiry); reflash: cd firmware && pio run -e bt -t upload")
+			return
+		}
+	}
 	if h.captureNotRunning() {
 		writeErr(w, http.StatusConflict, "sensor_not_connected", "no capture provider is connected; the sensor must be online")
 		return
@@ -298,9 +328,9 @@ func (h *handlers) btMode(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadGateway, "command_send_failed", "the command could not be delivered to the sensor")
 		return
 	}
-	h.d.Log.Info("radio mode requested", "mode", body.Mode)
+	h.d.Log.Info("radio mode requested", "mode", body.Mode, "classic", classic)
 	writeJSON(w, http.StatusAccepted, map[string]any{"data": map[string]any{
-		"mode": body.Mode, "command": cmd,
+		"mode": body.Mode, "classic": classic, "command": cmd,
 		"note": "the sensor answers with bluetooth.system.status (see /bluetooth/status); a switch takes about a second",
 	}})
 }

@@ -159,13 +159,17 @@ export const api = {
       : get<Paged<StoredEvent>>(`/bluetooth/events?${page(limit, offset)}${eventQuery({ ...q, bssid: undefined })}`, s),
 
   /** Ask a switch-mode sensor to change radio mode (docs/bluetooth/api.md).
-   * "bluetooth" pauses Wi-Fi monitoring on that sensor. */
-  btSetMode: (mode: "wifi" | "bluetooth" | "status") => {
+   * "bluetooth" pauses Wi-Fi monitoring on that sensor; classic true/false
+   * turns its Classic inquiry on/off. */
+  btSetMode: (mode: "wifi" | "bluetooth" | "status", classic?: boolean) => {
     if (isDemo()) {
       return Promise.reject(new ApiError(503, "demo", "switching the radio is not available in demo mode"));
     }
-    return request<One<{ mode: string; command: string; note: string }>>("/bluetooth/mode", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }),
+    // classic: Bluetooth mode with bounded Classic inquiry (transmits); only
+    // sent when set, so a plain "bluetooth" request stays BLE-only.
+    const body = classic === undefined ? { mode } : { mode, classic };
+    return request<One<{ mode: string; classic: boolean; command: string; note: string }>>("/bluetooth/mode", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
   },
 

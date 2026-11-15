@@ -5,6 +5,7 @@
 
 #if WRAITH_BT_ENABLED
 #include <stdio.h>
+#include <string.h>
 
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -15,6 +16,7 @@
 #include "ble_scanner.h"
 #include "bt_manager.h"
 #include "bt_protocol.h"
+#include "classic_scanner.h"
 #include "host_link.h"
 #include "radio_mode.h"
 #include "system_status.h"
@@ -39,13 +41,14 @@ static int op_bt_start(void)
     if (bt_manager_start() != ESP_OK) {
         return -1;
     }
-    if (ble_scanner_start(&s_sink) != ESP_OK) {
+    if (ble_scanner_start(&s_sink) != ESP_OK || classic_scanner_start(&s_sink) != ESP_OK) {
         return -1; /* the state machine tears Bluetooth down and returns to Wi-Fi */
     }
     return 0;
 }
 static int op_bt_stop(void)
 {
+    classic_scanner_stop(); /* first: ends any inquiry while BLE is still up */
     ble_scanner_stop();
     return bt_manager_stop() == ESP_OK ? 0 : -1;
 }
@@ -70,10 +73,24 @@ static void op_changed(radio_mode_t m, const char *why)
     ESP_LOGW(TAG, "%s", msg);
 }
 
+static int op_bt_classic(bool on) { return classic_scanner_enable(on) == ESP_OK ? 0 : -1; }
+static void op_bt_poll(uint32_t now)
+{
+    ble_scanner_poll(now);
+    classic_scanner_poll(now);
+}
+static const char *op_bt_state(void)
+{
+    const char *ble = ble_scanner_state();
+    if (!classic_scanner_enabled()) return ble;
+    return strcmp(ble, "scanning_ble") == 0 ? "scanning_dual" : "scanning_classic";
+}
+
 static const radio_ops_t s_ops = {.wifi_stop = op_wifi_stop, .wifi_start = op_wifi_start,
                                   .bt_start = op_bt_start, .bt_stop = op_bt_stop,
-                                  .mode_changed = op_changed, .bt_poll = ble_scanner_poll,
-                                  .bt_state = ble_scanner_state, .ble_count = ble_scanner_device_count};
+                                  .mode_changed = op_changed, .bt_poll = op_bt_poll,
+                                  .bt_state = op_bt_state, .ble_count = ble_scanner_device_count,
+                                  .bt_classic = op_bt_classic, .classic_count = classic_scanner_device_count};
 
 static uint32_t sink_seq(void *ctx) { return transport_next_seq(); }
 static void sink_emit(const char *line, size_t len, void *ctx) { transport_send(line, len); }
@@ -102,6 +119,7 @@ void radio_mode_post_boot(void)
     system_status_add_capability("radio-switch");
     system_status_add_capability("bluetooth-classic");
     system_status_add_capability("bluetooth-le");
+    system_status_add_capability("classic-inquiry"); /* MODE BLUETOOTH CLASSIC */
     system_status_request_announce();
     bt_emit_status(&s_sink, "idle", "wifi", -1, -1, "Bluetooth build; Wi-Fi mode");
 }

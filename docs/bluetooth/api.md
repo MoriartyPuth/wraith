@@ -51,9 +51,14 @@ GATT lists are empty unless an operator ran GATT discovery on that device
 
 ## Radio mode (switch-mode sensors)
 
-`POST /api/v1/bluetooth/mode`, body `{"mode": "bluetooth" | "wifi" | "status"}`.
+`POST /api/v1/bluetooth/mode`, body `{"mode": "bluetooth" | "wifi" | "status"}`,
+optionally `"classic": true | false` with `"mode": "bluetooth"`.
 
-Sends `MODE BLUETOOTH` / `MODE WIFI` / `MODE STATUS` to the sensor. The sensor
+Sends `MODE BLUETOOTH` / `MODE WIFI` / `MODE STATUS` to the sensor
+(`"classic": true` → `MODE BLUETOOTH CLASSIC`). Plain `bluetooth` is BLE
+passive scanning only — and turns Classic inquiry off if it was on. **Classic
+inquiry transmits** (bounded slots, [architecture.md](architecture.md#firmware-bounded-classic-inquiry-bt-7)),
+so it is only ever sent on an explicit `"classic": true`. The sensor
 has one radio: **`bluetooth` pauses Wi-Fi monitoring** on it until `wifi`, a
 lost host link, or the sensor's session limit (15 min by default). The answer
 arrives asynchronously as `bluetooth.system.status` (or `.error`) — the
@@ -61,15 +66,18 @@ arrives asynchronously as `bluetooth.system.status` (or `.error`) — the
 
 | Response | When |
 |----------|------|
-| `202` | command sent (`data.command` echoes it) |
-| `400 invalid_body` | anything but exactly `{"mode": ...}` with one of the three values |
+| `202` | command sent (`data.command` and `data.classic` echo it) |
+| `400 invalid_body` | not `{"mode": ...}` with one of the three values (plus optional boolean `classic`, only with `bluetooth`) |
 | `415` | not `application/json` — the CSRF guard: cross-site pages cannot switch the radio |
 | `409 radio_switch_unsupported` | no sensor announced the `radio-switch` capability (flash `pio run -e bt`) |
+| `409 classic_unsupported` | `"classic": true` but no sensor announced `classic-inquiry` (firmware older than BT-7) |
 | `409 sensor_not_connected` | no capture provider running |
 | `502 command_send_failed` | the serial write failed |
 
 The dashboard's Bluetooth overview has the control on each sensor card, with a
-confirmation step that states Wi-Fi monitoring will pause.
+confirmation step that states Wi-Fi monitoring will pause. In Bluetooth mode
+it offers *Classic inquiry…* (a second confirmation that says it transmits)
+and *Stop Classic inquiry*.
 
 ## Live stream (WebSocket `/api/v1/ws`)
 

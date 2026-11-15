@@ -2,8 +2,10 @@
 
 Status: **IMPLEMENTED — TESTED.** The Bluetooth firmware build emits
 `bluetooth.system.*` and the BLE events (`device_discovered`,
-`advertisement_observed`, `device_updated`), validated on hardware; Classic
-and GATT events are not emitted yet.
+`advertisement_observed`, `device_updated`), validated on hardware. The
+Classic events are emitted by BT-7 firmware when Classic inquiry is enabled
+(host-tested and validator-checked; not yet run on hardware). GATT events are
+not emitted yet.
 
 Protocol v4 is v3 plus the `bluetooth.*` event types below. Everything else —
 framing (`<json>\t<crc32>\n`), the 1024-byte line limit, event IDs, sequence
@@ -49,6 +51,7 @@ boot, `updated` when its metadata changes or on an aggregation window).
 ```
 address        BD_ADDR
 name?          string ≤ 248 bytes   only if the device's name was obtained
+                                    (WRAITH firmware: from the EIR only, ≤ 64 bytes)
 cod?           integer 0–16777215   24-bit Class of Device, raw
 device_class?  "audio" | "phone" | "computer" | "peripheral" | "input" |
                "wearable" | "imaging" | "network" | "health" | "toy" |

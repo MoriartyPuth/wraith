@@ -28,6 +28,14 @@ func TestClassFromCoD(t *testing.T) {
 		{0x001F00, "uncategorized", "uncategorized major"},
 		{0x000000, "unknown", "miscellaneous"},
 		{0x000A00, "unknown", "reserved major 10"},
+		// Also in the firmware's decoder test (firmware/test/host/test_classic.c
+		// test_cod): the two decoders must agree.
+		{0x000100, "computer", "computer, minor 0"},
+		{0x002540, "input", "keyboard with a service bit"},
+		{0x0005C0, "input", "keyboard+pointing combo"},
+		{0x00050C, "input", "remote control (peripheral minor 3)"},
+		{0x000500, "peripheral", "uncategorized peripheral"},
+		{0xFFFFFFFF, "uncategorized", "bits above 23 ignored"},
 	} {
 		if got := ClassFromCoD(tc.cod); got != tc.want {
 			t.Errorf("CoD %#06x (%s) = %q, want %q", tc.cod, tc.what, got, tc.want)

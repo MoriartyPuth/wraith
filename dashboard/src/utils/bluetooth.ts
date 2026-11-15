@@ -169,6 +169,15 @@ export function coexistence(s: BTSensorStatus | undefined): Coexistence {
   return { tone: "good", text: "Radio in Wi-Fi mode: Wi-Fi monitoring is running and Bluetooth is not being scanned. Bluetooth data shown is from earlier Bluetooth sessions." };
 }
 
+/** Classic inquiry is the one Bluetooth activity that transmits; the sensor
+ * reports it through its scan state (docs/bluetooth/architecture.md). */
+export function classicInquiryOn(s: BTSensorStatus | undefined): boolean {
+  return s?.mode === "bluetooth" && (s.state === "scanning_dual" || s.state === "scanning_classic");
+}
+
+export const CLASSIC_TX_WARNING =
+  "Classic inquiry transmits: the sensor broadcasts inquiry packets for a few seconds every 30 s and discoverable devices answer (they can see it). BLE scanning stays passive. Only use it where you are allowed to.";
+
 export function scanStateLabel(state: BTSensorStatus["state"]): string {
   switch (state) {
     case "scanning_ble": return "BLE scanning";

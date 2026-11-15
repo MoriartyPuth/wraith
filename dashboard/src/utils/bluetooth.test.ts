@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BTDevice, StoredEvent } from "../types/api";
 import {
-  btDeviceHref, coexistence, companyLabel, deviceFields, deviceSearchText, rssiHistogram, scanStateLabel, shortUUID, uuidName,
+  btDeviceHref, classicInquiryOn, coexistence, companyLabel, deviceFields, deviceSearchText, rssiHistogram, scanStateLabel, shortUUID, uuidName,
 } from "./bluetooth";
 import { describeEvent } from "./describe";
 import * as demo from "../services/demo";
@@ -86,6 +86,15 @@ describe("coexistence and status", () => {
   it("labels scan states", () => {
     expect(scanStateLabel("scanning_dual")).toBe("BLE + Classic");
     expect(scanStateLabel(null)).toBe("unknown");
+  });
+
+  it("classicInquiryOn follows the reported scan state in Bluetooth mode only", () => {
+    const base = { sensor_id: "n", mode: "bluetooth", state: "scanning_ble" } as Parameters<typeof classicInquiryOn>[0];
+    expect(classicInquiryOn(base)).toBe(false);
+    expect(classicInquiryOn({ ...base!, state: "scanning_dual" })).toBe(true);
+    expect(classicInquiryOn({ ...base!, state: "scanning_classic" })).toBe(true);
+    expect(classicInquiryOn({ ...base!, mode: "wifi", state: "scanning_dual" })).toBe(false);
+    expect(classicInquiryOn(undefined)).toBe(false);
   });
 });
 

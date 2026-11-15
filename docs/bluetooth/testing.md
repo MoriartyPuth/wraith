@@ -175,9 +175,40 @@ Wi-Fi events: none after the Bluetooth confirmation; Wi-Fi capture resumed
 within ~1.5 s of switching back. No beacon/wearable signal was present, so
 classification was not exercised on hardware (host-tested only).
 
+## Classic inquiry (BT-7)
+
+Host (`firmware/test/host/test_classic.c` + `test_bt.c`, ASan/UBSan):
+CoD → class on 19 vectors (the same vectors are in Core's
+`TestClassFromCoD`, so the two decoders agree); EIR name precedence
+(Complete over Shortened in either order), the zero-length terminator,
+overrun, empty name, NULL; 64-byte cut on a UTF-8 boundary; every prefix of a
+full EIR in an exact-size heap buffer and 20 000 random EIRs. Tracker:
+discovery and 30 s updates, sticky name and RSSI, immediate update on a name
+or CoD change, fields omitted when unknown, a 30-device burst under the serial
+budget (nothing lost), eviction accounting (responses − evicted_counts = sum
+of emitted counts), expiry and rediscovery, flush. Scheduler: off by
+default, first slot, slot end, re-cancel while the controller is still
+inquiring, no start on top of a running inquiry, disable mid-slot, retry
+after a refused start, exactly 20 % duty over 10 minutes across a timer wrap.
+Radio commands: `MODE BLUETOOTH CLASSIC` from Wi-Fi and in place, off again
+with `MODE BLUETOOTH`, cleared by `MODE WIFI`, failure keeps BLE running,
+malformed variants, firmware without Classic. Mutation checks (13: count
+contract, name precedence, eviction count, slot bound, no-start-while-active,
+change trigger, RSSI omission, EIR bounds, UTF-8 cut, CoD minor classes,
+in-place off, clear on Wi-Fi, command parsing) — all caught. Every Classic
+event the firmware emits passes the Go validator. Core: `classic` flag
+validation, `409 classic_unsupported`, command mapping. Wi-Fi builds
+(`wraith-nano`, `tx`): all 462 objects byte-identical before/after.
+
+**Hardware: not run yet.** Plan: enable Classic next to a discoverable phone
+or speaker; check `rnr=0` and `recancel` small in the slot reports; Classic
+counts reconcile (results − qdrop − evicted_counts = stored); BLE adverts/s
+inside vs outside inquiry slots against the 16.6/s baseline; heap and
+`boot_id` unchanged; `MODE BLUETOOTH` stops inquiry within one tick.
+
 ## Not tested yet
 
-- Classic inquiry (BT-7), and BLE + Classic scheduled together.
+- Classic inquiry on hardware (BT-7), and BLE + Classic scheduled together.
 - BLE classification on real beacons/wearables (no such device was nearby).
 - Stack high-water marks of the Bluedroid-internal tasks (only the radio
   task's is reported).

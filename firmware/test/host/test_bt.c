@@ -14,6 +14,8 @@ int failures;
 
 void run_ble_tests(void);
 void emit_ble_samples(void);
+void run_classic_tests(void);
+void emit_classic_samples(void);
 
 /* ---- capture sink ---- */
 #define MAX_LINES 64
@@ -219,6 +221,80 @@ static void test_scan_hooks(void)
     CHECK(g_polls == polls && !strstr(last(), "ble_devices"));
 }
 
+/* MODE BLUETOOTH CLASSIC: Classic inquiry (transmits) only on request;
+ * on/off without leaving Bluetooth mode; always off after a switch. */
+static int g_classic_calls, g_classic_on, g_fail_classic;
+static int f_classic(bool on)
+{
+    g_classic_calls++;
+    if (g_fail_classic) return -1;
+    g_classic_on = on;
+    return 0;
+}
+static long f_ccount(void) { return 3; }
+static void test_classic_mode(void)
+{
+    radio_ops_t ops = g_ops;
+    ops.bt_classic = f_classic, ops.classic_count = f_ccount;
+    reset(0);
+    radio_init(&g_sink, &ops, 0);
+    g_classic_calls = g_classic_on = g_fail_classic = 0;
+
+    /* Plain MODE BLUETOOTH never touches Classic. */
+    radio_command("MODE BLUETOOTH", 0);
+    radio_tick(0, true);
+    CHECK(radio_current() == RADIO_BLUETOOTH && g_classic_calls == 0 && !radio_classic_on());
+    CHECK(strstr(last(), "BLE passive") && strstr(last(), "\"classic_devices\":3"));
+
+    /* Turn it on in place: no switch. */
+    int changes = g_changes;
+    radio_command("MODE BLUETOOTH CLASSIC", 100);
+    radio_tick(100, true);
+    CHECK(g_classic_calls == 1 && g_classic_on && radio_classic_on() && g_changes == changes);
+    CHECK(strstr(last(), "Classic inquiry (transmits)"));
+    radio_command("  MODE  BLUETOOTH   CLASSIC  ", 150); /* already on */
+    radio_tick(150, true);
+    CHECK(g_classic_calls == 1 && strstr(last(), "already in Bluetooth mode"));
+    /* ...and off again. */
+    radio_command("MODE BLUETOOTH", 200);
+    radio_tick(200, true);
+    CHECK(g_classic_calls == 2 && !g_classic_on && !radio_classic_on() && strstr(last(), "BLE passive"));
+
+    /* From Wi-Fi in one command; back to Wi-Fi clears it (bt_stop ends it). */
+    radio_command("MODE WIFI", 300);
+    radio_tick(300, true);
+    g_calls[0] = '\0';
+    radio_command("MODE BLUETOOTH CLASSIC", 400);
+    radio_tick(400, true);
+    CHECK(strcmp(g_calls, "wS bU ") == 0 && radio_classic_on() && count_with("Classic inquiry (transmits)") >= 2);
+    radio_command("MODE WIFI", 500);
+    radio_tick(500, true);
+    CHECK(!radio_classic_on() && !strstr(last(), "classic_devices"));
+    radio_command("MODE BLUETOOTH", 600);
+    radio_tick(600, true);
+    CHECK(!radio_classic_on());
+
+    /* Enabling fails: error, Bluetooth mode stays (BLE only). */
+    g_fail_classic = 1;
+    radio_command("MODE BLUETOOTH CLASSIC", 700);
+    radio_tick(700, true);
+    CHECK(radio_current() == RADIO_BLUETOOTH && !radio_classic_on() && count_with("\"code\":\"classic_failed\"") == 1);
+    g_fail_classic = 0;
+
+    /* Malformed. */
+    int errs = count_with("bad_command");
+    radio_command("MODE BLUETOOTH CLASSIC NOW", 800);
+    radio_command("MODE BLUETOOTH CLASSICX", 800);
+    radio_command("MODE WIFI CLASSIC", 800);
+    CHECK(count_with("bad_command") == errs + 3);
+
+    /* Firmware without Classic: rejected, nothing happens. */
+    reset(0);
+    radio_command("MODE BLUETOOTH CLASSIC", 0);
+    radio_tick(0, true);
+    CHECK(radio_current() == RADIO_WIFI && count_with("\"code\":\"classic_unsupported\"") == 1);
+}
+
 static void test_failures_fall_back_to_wifi(void)
 {
     /* Bluetooth fails to start: release it and restart Wi-Fi. */
@@ -313,6 +389,7 @@ int main(int argc, char **argv)
     if (argc > 1 && strcmp(argv[1], "--emit") == 0) {
         emit_samples();
         emit_ble_samples();
+        emit_classic_samples();
         return 0;
     }
     test_parse();
@@ -322,7 +399,9 @@ int main(int argc, char **argv)
     test_scan_hooks();
     test_failures_fall_back_to_wifi();
     test_emitters();
+    test_classic_mode();
     run_ble_tests();
+    run_classic_tests();
     if (failures) {
         fprintf(stderr, "bluetooth host tests: %d FAILED\n", failures);
         return 1;

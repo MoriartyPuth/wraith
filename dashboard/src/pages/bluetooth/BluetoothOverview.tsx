@@ -7,7 +7,7 @@ import { Async, Badge, Button, PageHeader, Panel, Rssi, Stat, Table, td } from "
 import { RssiHistogram } from "../../components/LazyCharts";
 import { ActiveBadge, BTDeviceLink, TransportBadge } from "../../components/bluetooth/BTBadges";
 import type { BTSensorStatus } from "../../types/api";
-import { coexistence, rssiHistogram, scanStateLabel } from "../../utils/bluetooth";
+import { CLASSIC_TX_WARNING, classicInquiryOn, coexistence, rssiHistogram, scanStateLabel } from "../../utils/bluetooth";
 import { timeAgo } from "../../utils/format";
 
 const HIST_LIMIT = 500;
@@ -16,21 +16,39 @@ const HIST_LIMIT = 500;
  * so it needs an explicit second click that says so. */
 function ModeControl({ s }: { s: BTSensorStatus }) {
   const [confirming, setConfirming] = useState(false);
+  const [confirmClassic, setConfirmClassic] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ t: "good" | "bad"; text: string } | null>(null);
-  const send = (mode: "wifi" | "bluetooth" | "status") => {
+  const classicOn = classicInquiryOn(s);
+  const send = (mode: "wifi" | "bluetooth" | "status", classic?: boolean) => {
     setBusy(true);
     setMsg(null);
-    api.btSetMode(mode)
-      .then(() => setMsg({ t: "good", text: mode === "status" ? "Status requested." : `Switch to ${mode === "wifi" ? "Wi-Fi" : "Bluetooth"} requested; the card updates when the sensor confirms.` }))
+    const what = classic !== undefined && s.mode === "bluetooth"
+      ? `Classic inquiry ${classic ? "on" : "off"} requested`
+      : `Switch to ${mode === "wifi" ? "Wi-Fi" : "Bluetooth"} requested`;
+    api.btSetMode(mode, classic)
+      .then(() => setMsg({ t: "good", text: mode === "status" ? "Status requested." : `${what}; the card updates when the sensor confirms.` }))
       .catch((e: Error) => setMsg({ t: "bad", text: e.message }))
-      .finally(() => { setBusy(false); setConfirming(false); });
+      .finally(() => { setBusy(false); setConfirming(false); setConfirmClassic(false); });
   };
   return (
     <div className="mt-3 border-t border-line pt-3">
       <div className="flex flex-wrap items-center gap-2">
         {s.mode === "bluetooth" ? (
-          <Button variant="primary" disabled={busy} onClick={() => send("wifi")}>Back to Wi-Fi</Button>
+          <>
+            <Button variant="primary" disabled={busy} onClick={() => send("wifi")}>Back to Wi-Fi</Button>
+            {classicOn ? (
+              <Button disabled={busy} onClick={() => send("bluetooth", false)} title="BLE passive scanning continues">Stop Classic inquiry</Button>
+            ) : confirmClassic ? (
+              <>
+                <span className="text-xs text-warn">{CLASSIC_TX_WARNING}</span>
+                <Button variant="primary" disabled={busy} onClick={() => send("bluetooth", true)}>Start Classic inquiry</Button>
+                <Button disabled={busy} onClick={() => setConfirmClassic(false)}>Cancel</Button>
+              </>
+            ) : (
+              <Button disabled={busy} onClick={() => setConfirmClassic(true)}>Classic inquiry…</Button>
+            )}
+          </>
         ) : confirming ? (
           <>
             <span className="text-xs text-warn">Wi-Fi monitoring on {s.sensor_id} pauses until you switch back, the host link drops, or the sensor's Bluetooth session limit ends it.</span>
