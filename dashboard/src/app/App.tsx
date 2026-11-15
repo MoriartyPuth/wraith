@@ -6,6 +6,7 @@ import { Empty } from "../components/ui";
 
 // One chunk per page: the first paint loads only the shell and that page.
 const Overview = lazy(() => import("../pages/Overview"));
+const WifiOverview = lazy(() => import("../pages/WifiOverview"));
 const WirelessMonitor = lazy(() => import("../pages/WirelessMonitor"));
 const AccessPoints = lazy(() => import("../pages/AccessPoints"));
 const APDetail = lazy(() => import("../pages/APDetail"));
@@ -30,6 +31,7 @@ export function App() {
         <Routes>
           <Route element={<Shell />}>
             <Route index element={<Overview />} />
+            <Route path="wifi" element={<WifiOverview />} />
             <Route path="monitor" element={<WirelessMonitor />} />
             <Route path="access-points" element={<AccessPoints />} />
             <Route path="access-points/:bssid" element={<APDetail />} />

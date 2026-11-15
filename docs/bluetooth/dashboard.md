@@ -5,8 +5,14 @@ headless Firefox against a real Core with pipeline-seeded data and in demo
 mode). No firmware produces Bluetooth events yet, so on a live system the
 pages show their empty states until the Bluetooth firmware build exists.
 
-A separate **Bluetooth** group in the navigation; the Wi-Fi pages are
-unchanged. Code: `dashboard/src/pages/bluetooth/`,
+Navigation (2026-11-16): a master **Overview** (`/`) on top, then a **Wi-Fi**
+group (Wi-Fi overview at `/wifi` and the Wi-Fi pages), a **Bluetooth** group,
+and a **System** group (Detection Center — findings from both radios —
+Sensors, Event History, Settings). All earlier URLs are unchanged. The master
+overview shows sensor/AP/Bluetooth/finding totals, each sensor's radio mode
+and what it means for coverage, one summary card per radio linking to its
+section, the latest findings tagged Wi-Fi or Bluetooth, and recent activity
+from both radios. Code: `dashboard/src/pages/bluetooth/`,
 `dashboard/src/components/bluetooth/`, logic in `dashboard/src/utils/bluetooth.ts`.
 
 | Route | Page |

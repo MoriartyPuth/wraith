@@ -118,7 +118,7 @@ export default function BluetoothOverview() {
         </Async>
       </Panel>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <div className="mt-4 grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Panel title="Signal strength distribution">
           <Async state={devices} isEmpty={(d) => d.data.length === 0} empty="No Bluetooth devices observed yet.">
             {(d) => (

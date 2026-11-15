@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BTDevice, StoredEvent } from "../types/api";
 import {
-  btDeviceHref, btDeviceLabel, classicInquiryOn, isBluetoothFinding, coexistence, companyLabel, deviceFields, deviceSearchText, rssiHistogram, scanStateLabel, shortUUID, uuidName,
+  btDeviceHref, btDeviceLabel, classicInquiryOn, isBluetoothFinding, splitFindings, coexistence, companyLabel, deviceFields, deviceSearchText, rssiHistogram, scanStateLabel, shortUUID, uuidName,
 } from "./bluetooth";
 import { describeEvent } from "./describe";
 import * as demo from "../services/demo";
@@ -148,5 +148,16 @@ describe("demo Bluetooth data cannot pass for real observations", () => {
     expect(btDeviceLabel("garbage")).toBe("garbage");
     expect(isBluetoothFinding("ble_advertising_flood") && isBluetoothFinding("bt_identity_change")).toBe(true);
     expect(isBluetoothFinding("deauth_activity") || isBluetoothFinding("rogue_ap_indicator")).toBe(false);
+  });
+
+  it("splitFindings separates Wi-Fi and Bluetooth findings", () => {
+    const r = splitFindings([
+      { category: "rogue_ap_indicator", status: "open", severity: "low" },
+      { category: "deauth_activity", status: "dismissed", severity: "high" },
+      { category: "ble_advertising_flood", status: "open", severity: "high" },
+      { category: "bt_identity_change", status: "reviewed", severity: "low" },
+    ]);
+    expect(r).toEqual({ wifi: { open: 1, total: 2 }, bluetooth: { open: 1, total: 2 }, openHigh: 1 });
+    expect(splitFindings([])).toEqual({ wifi: { open: 0, total: 0 }, bluetooth: { open: 0, total: 0 }, openHigh: 0 });
   });
 });

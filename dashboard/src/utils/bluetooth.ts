@@ -15,6 +15,26 @@ export function isBluetoothFinding(category: string): boolean {
   return category.startsWith("bt_") || category.startsWith("ble_");
 }
 
+export interface FindingSplit {
+  wifi: { open: number; total: number };
+  bluetooth: { open: number; total: number };
+  openHigh: number; // open findings of high severity, both domains
+}
+
+/** Splits findings into the Wi-Fi and Bluetooth domains for the master overview. */
+export function splitFindings(fs: { category: string; status: string; severity: string }[]): FindingSplit {
+  const out: FindingSplit = { wifi: { open: 0, total: 0 }, bluetooth: { open: 0, total: 0 }, openHigh: 0 };
+  for (const f of fs) {
+    const d = isBluetoothFinding(f.category) ? out.bluetooth : out.wifi;
+    d.total++;
+    if (f.status === "open") {
+      d.open++;
+      if (f.severity === "high") out.openHigh++;
+    }
+  }
+  return out;
+}
+
 /** "classic:AA:.." -> "AA:.. (Classic)", "ble:random:AA:.." -> "AA:.. (BLE random)". */
 export function btDeviceLabel(id: string): string {
   const m = /^(classic|ble):(?:(public|random):)?([0-9A-F]{2}(?::[0-9A-F]{2}){5})$/i.exec(id);

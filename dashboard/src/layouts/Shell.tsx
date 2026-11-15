@@ -6,27 +6,45 @@ import { useLive } from "../services/live";
 import { isDemo, setDemo } from "../services/mode";
 import { Loading } from "../components/ui";
 
-export const NAV = [
-  { to: "/", label: "Overview" },
-  { to: "/monitor", label: "Wireless Monitor" },
-  { to: "/access-points", label: "Access Points" },
-  { to: "/clients", label: "Clients" },
-  { to: "/events", label: "Security Events" },
-  { to: "/detections", label: "Detection Center" },
-  { to: "/pmf", label: "PMF Inspector" },
-  { to: "/channels", label: "Channel Analysis" },
-  { to: "/sensors", label: "Sensors" },
-  { to: "/history", label: "Event History" },
-  { to: "/settings", label: "Settings" },
+type NavItem = { to: string; label: string };
+type NavGroup = { title: string | null; short?: string; items: NavItem[] };
+
+// Sidebar: the master overview, then one group per radio, then what both
+// share. Group titles are hidden on narrow screens, where `short` prefixes
+// the ambiguous labels instead ("Wi-Fi Overview", "BT Events").
+export const NAV_GROUPS: NavGroup[] = [
+  { title: null, items: [{ to: "/", label: "Overview" }] },
+  {
+    title: "Wi-Fi", short: "Wi-Fi", items: [
+      { to: "/wifi", label: "Overview" },
+      { to: "/monitor", label: "Wireless Monitor" },
+      { to: "/access-points", label: "Access Points" },
+      { to: "/clients", label: "Clients" },
+      { to: "/events", label: "Security Events" },
+      { to: "/pmf", label: "PMF Inspector" },
+      { to: "/channels", label: "Channel Analysis" },
+    ],
+  },
+  {
+    title: "Bluetooth", short: "BT", items: [
+      { to: "/bluetooth", label: "Overview" },
+      { to: "/bluetooth/classic", label: "Classic" },
+      { to: "/bluetooth/ble", label: "BLE" },
+      { to: "/bluetooth/events", label: "Events" },
+    ],
+  },
+  {
+    title: "System", items: [
+      { to: "/detections", label: "Detection Center" },
+      { to: "/sensors", label: "Sensors" },
+      { to: "/history", label: "Event History" },
+      { to: "/settings", label: "Settings" },
+    ],
+  },
 ];
 
-// Bluetooth (protocol v4) — its own group so the Wi-Fi navigation is unchanged.
-export const NAV_BT = [
-  { to: "/bluetooth", label: "Overview" },
-  { to: "/bluetooth/classic", label: "Classic" },
-  { to: "/bluetooth/ble", label: "BLE" },
-  { to: "/bluetooth/events", label: "Events" },
-];
+/** Items whose label only makes sense under their group title. */
+const AMBIGUOUS = new Set(["Overview", "Events"]);
 
 const navCls = ({ isActive }: { isActive: boolean }) =>
   `whitespace-nowrap rounded px-3 py-1.5 text-sm ${isActive ? "bg-raised text-ink" : "text-ink-2 hover:bg-raised/60 hover:text-ink"}`;
@@ -62,17 +80,19 @@ export function Shell() {
             <div className="text-xs text-ink-3">Observe. Analyze. Understand.</div>
           </div>
           <nav className="flex gap-1 overflow-x-auto px-2 pb-2 md:flex-col md:overflow-visible">
-            {NAV.map((n) => (
-              <NavLink key={n.to} to={n.to} end={n.to === "/"} className={navCls}>
-                {n.label}
-              </NavLink>
-            ))}
-            <div className="hidden px-3 pb-1 pt-4 text-xs uppercase tracking-wide text-ink-3 md:block" aria-hidden>Bluetooth</div>
-            {NAV_BT.map((n) => (
-              <NavLink key={n.to} to={n.to} end={n.to === "/bluetooth"} className={navCls}
-                aria-label={`Bluetooth ${n.label}`}>
-                <span className="md:hidden">BT </span>{n.label}
-              </NavLink>
+            {NAV_GROUPS.map((g) => (
+              <div key={g.title ?? "top"} className="contents">
+                {g.title && <div className="hidden px-3 pb-1 pt-4 text-xs uppercase tracking-wide text-ink-3 md:block" aria-hidden>{g.title}</div>}
+                {g.items.map((n) => {
+                  const prefix = g.short && AMBIGUOUS.has(n.label) ? g.short : null;
+                  return (
+                    <NavLink key={n.to} to={n.to} end={n.to === "/" || n.to === "/wifi" || n.to === "/bluetooth"} className={navCls}
+                      aria-label={prefix ? `${g.title} ${n.label}` : undefined}>
+                      {prefix && <span className="md:hidden">{prefix} </span>}{n.label}
+                    </NavLink>
+                  );
+                })}
+              </div>
             ))}
           </nav>
         </aside>
