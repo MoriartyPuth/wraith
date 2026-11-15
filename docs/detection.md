@@ -51,7 +51,8 @@ and need tuning against real environments (Phase 6 false-positive evaluation).
 ## Bluetooth detectors (BT-10)
 
 Status: **IMPLEMENTED — TESTED** (unit, pipeline integration, mutation
-checks); none triggered on real traffic yet. Code:
+checks). Live check 2026-11-15: a 10-minute BLE + Classic session on real
+traffic produced no Bluetooth finding (no false positives; none expected). Code:
 `core/internal/detection/bluetooth.go`. A finding about one Bluetooth device
 carries `bt_device` (the `bt_devices` row id, e.g. `classic:AA:BB:…`,
 `ble:random:AA:BB:…`; migration `0006_bt_findings`) instead of a BSSID and
