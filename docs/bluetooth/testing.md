@@ -200,15 +200,33 @@ event the firmware emits passes the Go validator. Core: `classic` flag
 validation, `409 classic_unsupported`, command mapping. Wi-Fi builds
 (`wraith-nano`, `tx`): all 462 objects byte-identical before/after.
 
-**Hardware: not run yet.** Plan: enable Classic next to a discoverable phone
-or speaker; check `rnr=0` and `recancel` small in the slot reports; Classic
-counts reconcile (results − qdrop − evicted_counts = stored); BLE adverts/s
-inside vs outside inquiry slots against the 16.6/s baseline; heap and
-`boot_id` unchanged; `MODE BLUETOOTH` stops inquiry within one tick.
+**Hardware (2026-11-15, nano-70b2a8, real environment).** One run through
+Core's API: 2 min BLE only → `classic: true` for 5 min → `classic: false`
+for 30 s → Wi-Fi.
+
+| Check | Result |
+|-------|--------|
+| Remote Name Requests (`rnr`) | **0** in all 10 slots — the slot-end cancel keeps Bluedroid out of its paging phase |
+| Re-cancels / start failures / qdrop | 0 / 0 / 0 |
+| Inquiry airtime | 10 slots, `inq_ms` 60 618 (6.06 s each) in 300 s = 20.2 % |
+| Classic devices | 1 discoverable phone (`OPPO A54`, name from EIR, CoD → `phone`, −89…−95 dBm): 6 inquiry responses → 1 `device_discovered` + 5 `device_updated`, counts sum 6 = results 6 |
+| BLE reconciliation | results 9 601 = sum of BLE counts Core stored 9 601 (qdrop 0, discard 0, evicted 0) |
+| Classic off | `MODE BLUETOOTH` answered within ~1 s with `scanning_ble`; no slot after it |
+| Stability | `boot_id` unchanged, sequence gap count unchanged (42 before and after), 0 rejected; Wi-Fi events resumed after switching back |
+| Heap | Bluetooth mode 94.3 KB free (BT-6: ~102 KB; Classic table + queue ≈ 7.3 KB); lowest since boot 63.3 KB; radio task stack ≥ 3.6 KB free |
+
+BLE adverts/s per 60 s window (`results` deltas): BLE only 25.7; with
+Classic 23.9, 22.3, 22.2, 16.4, 17.0; BLE only again (35 s) 20.2. The
+ambient BLE rate drifts by about as much as Classic costs, so the cost cannot
+be pinned down exactly; it stays within the 20 % airtime inquiry takes
+(roughly 0–20 % fewer adverts than neighbouring BLE-only windows), with no
+controller discards or queue drops. Busier Classic environments (many
+discoverable devices) are untested.
 
 ## Not tested yet
 
-- Classic inquiry on hardware (BT-7), and BLE + Classic scheduled together.
+- Classic inquiry with many discoverable devices (only one was present), and
+  the Classic table's eviction path on hardware.
 - BLE classification on real beacons/wearables (no such device was nearby).
 - Stack high-water marks of the Bluedroid-internal tasks (only the radio
   task's is reported).

@@ -4,7 +4,7 @@ Status: **IMPLEMENTED — TESTED.** The Bluetooth firmware build emits
 `bluetooth.system.*` and the BLE events (`device_discovered`,
 `advertisement_observed`, `device_updated`), validated on hardware. The
 Classic events are emitted by BT-7 firmware when Classic inquiry is enabled
-(host-tested and validator-checked; not yet run on hardware). GATT events are
+(validated on hardware). GATT events are
 not emitted yet.
 
 Protocol v4 is v3 plus the `bluetooth.*` event types below. Everything else —

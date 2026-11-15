@@ -3,9 +3,8 @@
 Status: protocol v4, Core inventory ([event-protocol.md](event-protocol.md)),
 REST/WebSocket API ([api.md](api.md)), dashboard ([dashboard.md](dashboard.md))
 the firmware **switch-mode foundation** (BT-5) and **passive BLE scanning**
-(BT-6) exist and are **validated on hardware**; bounded **Classic inquiry**
-(BT-7) is implemented and host-tested but **not yet run on hardware**
-([testing.md](testing.md)).
+(BT-6) and bounded **Classic inquiry** (BT-7) exist and are **validated on
+hardware** ([testing.md](testing.md)).
 
 ## Decision: one board, switch mode (2026-11-13)
 
@@ -145,7 +144,7 @@ discovery is sent as `device_updated`.
 
 ## Firmware: bounded Classic inquiry (BT-7)
 
-Status: **IMPLEMENTED — host-tested; NOT YET RUN ON HARDWARE.**
+Status: **IMPLEMENTED — TESTED on hardware 2026-11-15** (testing.md).
 
 | Piece | What it does |
 |-------|--------------|
@@ -155,7 +154,7 @@ Status: **IMPLEMENTED — host-tested; NOT YET RUN ON HARDWARE.**
 | `classic_scanner.c` | GAP callback copies COD, RSSI and EIR into a 16-slot queue (overflow → `qdrop`). After each slot: `bluetooth.system.status` `classic slot N done; results=… qdrop=… rnr=… evicted_counts=… recancel=…`; on stop: `Classic stopped; slots=… inq_ms=… results=…` — results − qdrop − evicted_counts = the Classic counts Core stored. |
 | `classic_parser.c` | EIR Local Name (Complete preferred over Shortened; cut to 64 bytes on a UTF-8 boundary so an event always fits one line); CoD → `device_class`, the same decoding as Core (shared test vectors). |
 | `classic_tracker.c` | 32 addresses (heap only while Bluetooth is up). First response → `device_discovered` (count 1); later responses → `device_updated` once per 30 s, or at once when the name or CoD changes, always with count ≥ 1; names are sticky. Own serial budget 2 events/s (burst 8), on top of BLE's 8/s. Silent 5 min → final report, dropped. |
-| BLE during inquiry | BLE scanning keeps running; the dual-mode controller time-shares the radio. The cost to BLE (vs the 16.6 adverts/s baseline) is the first hardware measurement to make. State: `scanning_dual`. |
+| BLE during inquiry | BLE scanning keeps running; the dual-mode controller time-shares the radio. Measured: within the 20 % airtime inquiry takes, no discards or drops (testing.md). State: `scanning_dual`. |
 
 **Not yet:** LCD Bluetooth screens (BT-11) — in
 Bluetooth mode the LCD still shows the Wi-Fi screens (no channel).
