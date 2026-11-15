@@ -60,6 +60,8 @@ void ble_tracker_tick(uint32_t now);
  * something to send; call again (e.g. every 100 ms) until 0. */
 size_t ble_tracker_flush(uint32_t now);
 size_t ble_tracker_count(void);
+/* Strongest RSSI among addresses heard within `within_ms`; 0 if none. */
+int ble_tracker_best_rssi(uint32_t now, uint32_t within_ms);
 void ble_tracker_get_stats(ble_tracker_stats_t *out);
 
 /* Conservative inference from advertising data; BLE_CLS_NONE if unsure. */

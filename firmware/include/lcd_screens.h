@@ -22,3 +22,14 @@ typedef struct {
 /* Render one screen into two NUL-terminated, space-padded 16-char lines.
  * Output is plain ASCII (HD44780 ROM A00 safe). */
 void lcd_render(lcd_screen_t screen, const lcd_snapshot_t *s, char line1[LCD_COLS + 1], char line2[LCD_COLS + 1]);
+
+/* The LCD task renders through LCD_RENDER. The Bluetooth build routes it to
+ * lcd_bt_render (lcd_bt.c), which shows the Bluetooth screens while the radio
+ * is in Bluetooth mode and these screens otherwise; the Wi-Fi builds call
+ * lcd_render directly, exactly as before. */
+#if defined(WRAITH_BT_ENABLED) && WRAITH_BT_ENABLED
+void lcd_bt_render(lcd_screen_t screen, const lcd_snapshot_t *s, char line1[LCD_COLS + 1], char line2[LCD_COLS + 1]);
+#define LCD_RENDER lcd_bt_render
+#else
+#define LCD_RENDER lcd_render
+#endif

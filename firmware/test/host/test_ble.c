@@ -312,6 +312,21 @@ static void test_tracker_flush(void)
     CHECK(t < BLE_REPORT_WINDOW_MS);
 }
 
+/* LCD: strongest recently heard address. */
+static void test_tracker_best_rssi(void)
+{
+    treset(8);
+    const uint8_t a1[6] = {1, 0, 0, 0, 0, 1}, a2[6] = {1, 0, 0, 0, 0, 2};
+    CHECK(ble_tracker_best_rssi(0, 30000) == 0); /* nothing heard */
+    ble_tracker_observe(a1, BLE_ADDR_RANDOM, -80, BLE_ADV_IND, NULL, 0, 1000);
+    ble_tracker_observe(a2, BLE_ADDR_RANDOM, -45, BLE_ADV_IND, NULL, 0, 2000);
+    CHECK(ble_tracker_best_rssi(2000, 30000) == -45);
+    ble_tracker_observe(a1, BLE_ADDR_RANDOM, -80, BLE_ADV_IND, NULL, 0, 20000);
+    CHECK(ble_tracker_best_rssi(32001, 30000) == -80); /* a2 (last 2000) too old now; a1 still recent */
+    CHECK(ble_tracker_best_rssi(32000, 30000) == -45); /* a2 exactly at the edge still counts */
+    CHECK(ble_tracker_best_rssi(50001, 30000) == 0); /* both too old */
+}
+
 void run_ble_tests(void);
 void emit_ble_samples(void);
 
@@ -328,6 +343,7 @@ void run_ble_tests(void)
     test_tracker_classification();
     test_tracker_budget_eviction_expiry();
     test_tracker_flush();
+    test_tracker_best_rssi();
 }
 
 /* Samples for the Go validator: the worst cases for the serializer. */

@@ -18,3 +18,4 @@ bool classic_scanner_enabled(void);
 void classic_scanner_poll(uint32_t now);                   /* every radio tick in Bluetooth mode */
 void classic_scanner_stop(void);                           /* cancels inquiry, flushes reports, frees memory */
 long classic_scanner_device_count(void);
+int classic_scanner_best_rssi(uint32_t now); /* radio task only; 0 = none in 30 s */

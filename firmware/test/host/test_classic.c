@@ -261,6 +261,24 @@ static void test_tracker_budget_eviction_expiry(void)
     CHECK(sum_counts() == 3 && n_type("device_updated") == 1);
 }
 
+static void test_tracker_best_rssi(void)
+{
+    treset(8);
+    CHECK(classic_tracker_best_rssi(0, 30000) == 0);
+    classic_tracker_observe(A1, true, 0x000100, CLASSIC_RSSI_UNKNOWN, NULL, 0, 0); /* no RSSI: ignored */
+    CHECK(classic_tracker_best_rssi(0, 30000) == 0);
+    classic_tracker_observe(A2, true, 0x000100, -90, NULL, 0, 1000);
+    classic_tracker_observe(A1, true, 0x000100, -60, NULL, 0, 5000);
+    CHECK(classic_tracker_best_rssi(5000, 30000) == -60);
+    CHECK(classic_tracker_best_rssi(35001, 30000) == 0);
+    CHECK(classic_tracker_best_rssi(31000, 30000) == -60);
+    /* A device without RSSI never wins over one with it. */
+    treset(8);
+    classic_tracker_observe(A1, true, 0x000100, -90, NULL, 0, 0);
+    classic_tracker_observe(A2, true, 0x000100, CLASSIC_RSSI_UNKNOWN, NULL, 0, 0);
+    CHECK(classic_tracker_best_rssi(0, 30000) == -90);
+}
+
 /* ---- scheduler ---- */
 static void test_sched(void)
 {
@@ -325,6 +343,7 @@ void run_classic_tests(void)
     test_tracker_discovery_and_updates();
     test_tracker_budget_eviction_expiry();
     test_sched();
+    test_tracker_best_rssi();
 }
 
 /* Samples for the Go validator: worst cases for the serializer. */

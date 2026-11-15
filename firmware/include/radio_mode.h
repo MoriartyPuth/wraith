@@ -22,6 +22,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "lcd_bt_screens.h"
 #include "wraith_protocol.h"
 
 typedef enum { RADIO_WIFI = 0, RADIO_BLUETOOTH = 1 } radio_mode_t;
@@ -62,6 +63,14 @@ void radio_tick(uint32_t now, bool host_connected);
 
 radio_mode_t radio_current(void);
 bool radio_classic_on(void);
+/* Time until the automatic return to Wi-Fi (session limit); UINT32_MAX in
+ * Wi-Fi mode or without a limit. */
+uint32_t radio_bt_remaining_ms(uint32_t now);
+
+/* Bluetooth build: the radio task's latest published state for the LCD.
+ * Returns false in Wi-Fi mode (out untouched). Safe from any task. */
+bool radio_mode_lcd_info(lcd_bt_info_t *out);
+
 const char *radio_mode_name(radio_mode_t m);
 uint32_t radio_switch_count(void);
 uint32_t radio_failure_count(void);

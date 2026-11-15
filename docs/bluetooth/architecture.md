@@ -156,8 +156,25 @@ Status: **IMPLEMENTED — TESTED on hardware 2026-11-15** (testing.md).
 | `classic_tracker.c` | 32 addresses (heap only while Bluetooth is up). First response → `device_discovered` (count 1); later responses → `device_updated` once per 30 s, or at once when the name or CoD changes, always with count ≥ 1; names are sticky. Own serial budget 2 events/s (burst 8), on top of BLE's 8/s. Silent 5 min → final report, dropped. |
 | BLE during inquiry | BLE scanning keeps running; the dual-mode controller time-shares the radio. Measured: within the 20 % airtime inquiry takes, no discards or drops (testing.md). State: `scanning_dual`. |
 
-**Not yet:** LCD Bluetooth screens (BT-11) — in
-Bluetooth mode the LCD still shows the Wi-Fi screens (no channel).
+## LCD in Bluetooth mode (BT-11)
+
+Status: **IMPLEMENTED — host-tested; NOT YET CONFIRMED ON THE DISPLAY.**
+
+While the radio is in Bluetooth mode the 16x2 LCD rotates (4 s each, as in
+Wi-Fi mode) through:
+
+| Screen | Line 1 | Line 2 |
+|--------|--------|--------|
+| mode | `BT MODE BLE` / `BT MODE BLE+CL` | `WIFI BACK mm:ss` — countdown to the automatic return (session limit) |
+| counts | `BLE:16 CL:1` (addresses tracked now) | `CLASSIC TX ON` / `BLE PASSIVE` — whether the sensor is transmitting |
+| signal | `BEST BLE:-45` (strongest in the last 30 s) | `BEST CL:-90` / `NO CLASSIC YET` / `CLASSIC OFF` |
+| host | `HOST:CONNECTED` | sensor id (the Wi-Fi build's host screen) |
+
+In Wi-Fi mode the usual four screens are unchanged. The radio task publishes
+a snapshot (one aligned word per field) after every 100 ms tick; the LCD task
+only reads that, never the scanners' tables, which are freed on a switch back
+to Wi-Fi. Wi-Fi builds: `lcd.c` renders through `LCD_RENDER`, which is
+`lcd_render` there — all 462 objects byte-identical.
 
 ## Integration points (no Wi-Fi file changes)
 

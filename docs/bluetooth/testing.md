@@ -223,6 +223,14 @@ be pinned down exactly; it stays within the 20 % airtime inquiry takes
 controller discards or queue drops. Busier Classic environments (many
 discoverable devices) are untested.
 
+## LCD (BT-11)
+
+Host (`test_bt.c`, `test_ble.c`, `test_classic.c`): exact text of every
+Bluetooth screen, 16 printable columns for extremes (huge/unknown counts,
+RSSI below −127, a near-`UINT32_MAX` countdown — this caught an overflow in
+the round-up, fixed), countdown across a timer wrap, best RSSI windowing and
+unknown-RSSI handling. 9 mutation checks, all caught.
+
 ## Not tested yet
 
 - Classic inquiry with many discoverable devices (only one was present), and

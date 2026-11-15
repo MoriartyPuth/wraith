@@ -151,7 +151,7 @@ static void lcd_task(void *arg)
         lcd_screen_t screen = (lcd_screen_t)((tick / SCREEN_SECONDS) % LCD_SCREEN_COUNT);
         memset(&snap, 0, sizeof snap);
         s_snapshot(&snap);
-        lcd_render(screen, &snap, l1, l2);
+        LCD_RENDER(screen, &snap, l1, l2);
         if (write_line(0, l1) != ESP_OK || write_line(1, l2) != ESP_OK) {
             /* Display unplugged or bus glitch: back off, then re-initialise. */
             if (++failures % 10 == 1) {

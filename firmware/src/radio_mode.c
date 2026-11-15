@@ -95,10 +95,57 @@ static const radio_ops_t s_ops = {.wifi_stop = op_wifi_stop, .wifi_start = op_wi
 static uint32_t sink_seq(void *ctx) { return transport_next_seq(); }
 static void sink_emit(const char *line, size_t len, void *ctx) { transport_send(line, len); }
 
+/* Published by the radio task after every tick for the LCD task, which must
+ * not touch the scanners (their tables are freed on a switch to Wi-Fi). Each
+ * field is one aligned word; a screen may mix values from adjacent ticks. */
+static volatile bool s_pub_bt, s_pub_classic, s_pub_scanning;
+static volatile long s_pub_ble, s_pub_cl;
+static volatile int s_pub_best_ble, s_pub_best_cl;
+static volatile uint32_t s_pub_remaining;
+
+static void publish(uint32_t now)
+{
+    bool bt = radio_current() == RADIO_BLUETOOTH;
+    if (bt) {
+        s_pub_classic = radio_classic_on();
+        s_pub_scanning = strcmp(ble_scanner_state(), "scanning_ble") == 0;
+        s_pub_ble = ble_scanner_device_count();
+        s_pub_cl = classic_scanner_device_count();
+        s_pub_best_ble = ble_scanner_best_rssi(now);
+        s_pub_best_cl = classic_scanner_best_rssi(now);
+        s_pub_remaining = radio_bt_remaining_ms(now);
+    }
+    s_pub_bt = bt;
+}
+
+bool radio_mode_lcd_info(lcd_bt_info_t *out)
+{
+    if (!s_pub_bt) {
+        return false;
+    }
+    *out = (lcd_bt_info_t){.classic_on = s_pub_classic, .scanning = s_pub_scanning, .ble = s_pub_ble,
+                           .classic = s_pub_cl, .best_ble_rssi = s_pub_best_ble,
+                           .best_classic_rssi = s_pub_best_cl, .remaining_ms = s_pub_remaining};
+    return true;
+}
+
+void lcd_bt_render(lcd_screen_t screen, const lcd_snapshot_t *s, char l1[LCD_COLS + 1], char l2[LCD_COLS + 1])
+{
+    _Static_assert((int)LCD_BT_SCREEN_COUNT == (int)LCD_SCREEN_COUNT, "same rotation in both modes");
+    lcd_bt_info_t bt;
+    if (!radio_mode_lcd_info(&bt)) {
+        lcd_render(screen, s, l1, l2); /* Wi-Fi mode: the usual screens */
+        return;
+    }
+    lcd_bt_screens_render((lcd_bt_screen_t)screen, &bt, s, l1, l2);
+}
+
 static void radio_task(void *arg)
 {
     for (;;) {
-        radio_tick((uint32_t)(esp_timer_get_time() / 1000), host_link_connected());
+        uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
+        radio_tick(now, host_link_connected());
+        publish(now);
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }

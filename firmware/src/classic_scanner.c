@@ -239,4 +239,5 @@ void classic_scanner_stop(void)
 }
 
 long classic_scanner_device_count(void) { return s_table ? (long)classic_tracker_count() : 0; }
+int classic_scanner_best_rssi(uint32_t now) { return s_table ? classic_tracker_best_rssi(now, 30000) : 0; }
 #endif /* WRAITH_BT_ENABLED */

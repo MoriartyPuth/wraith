@@ -210,4 +210,5 @@ void ble_scanner_stop(void)
 
 const char *ble_scanner_state(void) { return s_scanning ? "scanning_ble" : "idle"; }
 long ble_scanner_device_count(void) { return s_table ? (long)ble_tracker_count() : 0; }
+int ble_scanner_best_rssi(uint32_t now) { return s_table ? ble_tracker_best_rssi(now, 30000) : 0; }
 #endif /* WRAITH_BT_ENABLED */

@@ -26,6 +26,13 @@ static bool s_classic; /* bounded Classic inquiry enabled (Bluetooth mode only) 
 const char *radio_mode_name(radio_mode_t m) { return m == RADIO_BLUETOOTH ? "bluetooth" : "wifi"; }
 radio_mode_t radio_current(void) { return s_mode; }
 bool radio_classic_on(void) { return s_classic; }
+
+uint32_t radio_bt_remaining_ms(uint32_t now)
+{
+    if (s_mode != RADIO_BLUETOOTH || s_max_bt_ms == 0) return UINT32_MAX;
+    uint32_t in = now - s_bt_since;
+    return in >= s_max_bt_ms ? 0 : s_max_bt_ms - in;
+}
 uint32_t radio_switch_count(void) { return s_switches; }
 uint32_t radio_failure_count(void) { return s_failures; }
 

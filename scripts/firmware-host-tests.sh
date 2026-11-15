@@ -52,6 +52,8 @@ fi
   "$root/firmware/test/host/test_classic.c" \
   "$root/firmware/src/classic_parser.c" \
   "$root/firmware/src/classic_tracker.c" \
+  "$root/firmware/src/lcd_bt_screens.c" \
+  "$root/firmware/src/lcd_screens.c" \
   "$root/firmware/src/ble_parser.c" \
   "$root/firmware/src/ble_tracker.c" \
   "$root/firmware/src/json_writer.c" \

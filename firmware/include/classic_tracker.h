@@ -78,6 +78,8 @@ void classic_tracker_tick(uint32_t now); /* ~10x/s */
  * entries still have something to send. Call until 0 before stopping. */
 size_t classic_tracker_flush(uint32_t now);
 size_t classic_tracker_count(void);
+/* Strongest RSSI among devices heard within `within_ms` (known RSSI only); 0 if none. */
+int classic_tracker_best_rssi(uint32_t now, uint32_t within_ms);
 void classic_tracker_get_stats(classic_tracker_stats_t *out);
 
 /* ---- scheduler ---- */

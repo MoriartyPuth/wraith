@@ -14,3 +14,4 @@ void ble_scanner_poll(uint32_t now);                     /* every radio tick in 
 void ble_scanner_stop(void);                             /* flushes pending reports, frees memory */
 const char *ble_scanner_state(void);                     /* "scanning_ble" | "idle" */
 long ble_scanner_device_count(void);
+int ble_scanner_best_rssi(uint32_t now);                 /* radio task only; 0 = none in 30 s */

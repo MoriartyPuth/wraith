@@ -37,6 +37,18 @@ size_t classic_tracker_count(void)
 
 void classic_tracker_get_stats(classic_tracker_stats_t *out) { *out = s_st; }
 
+int classic_tracker_best_rssi(uint32_t now, uint32_t within_ms)
+{
+    int best = 0;
+    for (size_t i = 0; i < s_cap; i++) {
+        const classic_dev_t *d = &s_tab[i];
+        if (d->used && d->has_rssi && (uint32_t)(now - d->last_ms) <= within_ms && (best == 0 || d->rssi > best)) {
+            best = d->rssi;
+        }
+    }
+    return best;
+}
+
 static classic_dev_t *find_or_add(const uint8_t addr[6], uint32_t now, bool *is_new)
 {
     *is_new = false;

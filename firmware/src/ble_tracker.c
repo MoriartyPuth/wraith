@@ -39,6 +39,16 @@ size_t ble_tracker_count(void)
 
 void ble_tracker_get_stats(ble_tracker_stats_t *out) { *out = s_st; }
 
+int ble_tracker_best_rssi(uint32_t now, uint32_t within_ms)
+{
+    int best = 0;
+    for (size_t i = 0; i < s_cap; i++) {
+        const ble_dev_t *d = &s_tab[i];
+        if (d->used && (uint32_t)(now - d->last_ms) <= within_ms && (best == 0 || d->rssi > best)) best = d->rssi;
+    }
+    return best;
+}
+
 /* ---- classification (conservative; only documented, fixed signals) ---- */
 
 static bool has_uuid16(const ble_adv_t *a, uint16_t u)

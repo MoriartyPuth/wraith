@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "bt_protocol.h"
+#include "lcd_bt_screens.h"
 #include "radio_mode.h"
 #include "test_util.h"
 #include "wraith_config.h"
@@ -163,6 +164,69 @@ static void test_auto_return(void)
 /* The mode must be re-announced whenever the host link comes (back) up: a
  * status emitted while Core was disconnected (e.g. the automatic return to
  * Wi-Fi after host loss) is lost, and Core would keep showing a stale mode. */
+/* LCD in Bluetooth mode: 16 printable ASCII columns, the Classic TX state
+ * always visible, countdown to the automatic return to Wi-Fi. */
+static void lcd_ok(const char *l) { CHECK(strlen(l) == LCD_COLS); for (int i = 0; i < LCD_COLS; i++) CHECK(l[i] >= 0x20 && l[i] < 0x7F); }
+static void test_lcd_bt(void)
+{
+    char a[LCD_COLS + 1], b[LCD_COLS + 1];
+    lcd_snapshot_t s = {.host_connected = true, .sensor_id = "nano-70b2a8"};
+    lcd_bt_info_t bt = {.classic_on = true, .scanning = true, .ble = 16, .classic = 1, .best_ble_rssi = -45,
+                        .best_classic_rssi = -90, .remaining_ms = 754000};
+    lcd_bt_screens_render(LCD_BT_MODE, &bt, &s, a, b);
+    CHECK(strcmp(a, "BT MODE BLE+CL  ") == 0 && strcmp(b, "WIFI BACK 12:34 ") == 0);
+    lcd_bt_screens_render(LCD_BT_COUNTS, &bt, &s, a, b);
+    CHECK(strcmp(a, "BLE:16 CL:1     ") == 0 && strcmp(b, "CLASSIC TX ON   ") == 0);
+    lcd_bt_screens_render(LCD_BT_SIGNAL, &bt, &s, a, b);
+    CHECK(strcmp(a, "BEST BLE:-45    ") == 0 && strcmp(b, "BEST CL:-90     ") == 0);
+    lcd_bt_screens_render(LCD_BT_HOST, &bt, &s, a, b);
+    CHECK(strcmp(a, "HOST:CONNECTED  ") == 0 && strncmp(b, "nano-70b2a8", 11) == 0);
+
+    /* BLE only, nothing heard, no limit, partial second rounds up. */
+    bt = (lcd_bt_info_t){.scanning = true, .ble = 0, .classic = 0, .remaining_ms = UINT32_MAX};
+    lcd_bt_screens_render(LCD_BT_MODE, &bt, &s, a, b);
+    CHECK(strcmp(a, "BT MODE BLE     ") == 0 && strcmp(b, "WIFI PAUSED     ") == 0);
+    lcd_bt_screens_render(LCD_BT_COUNTS, &bt, &s, a, b);
+    CHECK(strcmp(b, "BLE PASSIVE     ") == 0);
+    lcd_bt_screens_render(LCD_BT_SIGNAL, &bt, &s, a, b);
+    CHECK(strcmp(a, "NO BLE HEARD    ") == 0 && strcmp(b, "CLASSIC OFF     ") == 0);
+    bt.remaining_ms = 1;
+    lcd_bt_screens_render(LCD_BT_MODE, &bt, &s, a, b);
+    CHECK(strcmp(b, "WIFI BACK 00:01 ") == 0);
+
+    /* Extremes stay 16 columns: huge counts, unknown counts, RSSI floor,
+     * absurd countdown, every screen index including out of range. */
+    bt = (lcd_bt_info_t){.classic_on = true, .ble = 123456, .classic = -1, .best_ble_rssi = -300,
+                         .best_classic_rssi = -128, .remaining_ms = UINT32_MAX - 1};
+    for (int scr = 0; scr <= LCD_BT_SCREEN_COUNT; scr++) {
+        lcd_bt_screens_render((lcd_bt_screen_t)scr, &bt, &s, a, b);
+        lcd_ok(a);
+        lcd_ok(b);
+    }
+    lcd_bt_screens_render(LCD_BT_COUNTS, &bt, &s, a, b);
+    CHECK(strcmp(a, "BLE:999 CL:-    ") == 0);
+    lcd_bt_screens_render(LCD_BT_SIGNAL, &bt, &s, a, b);
+    CHECK(strcmp(a, "BEST BLE:-127   ") == 0 && strcmp(b, "BEST CL:-127    ") == 0);
+    lcd_bt_screens_render(LCD_BT_MODE, &bt, &s, a, b);
+    CHECK(strcmp(b, "WIFI BACK 99:59 ") == 0);
+}
+
+/* Countdown to the automatic return to Wi-Fi. */
+static void test_remaining(void)
+{
+    reset(15 * 60 * 1000);
+    CHECK(radio_bt_remaining_ms(0) == UINT32_MAX); /* Wi-Fi mode */
+    radio_command("MODE BLUETOOTH", 0xFFFFF000u);
+    radio_tick(0xFFFFF000u, true);
+    CHECK(radio_bt_remaining_ms(0xFFFFF000u) == 15 * 60 * 1000);
+    CHECK(radio_bt_remaining_ms(0xFFFFF000u + 60000) == 14 * 60 * 1000); /* across the timer wrap */
+    CHECK(radio_bt_remaining_ms(0xFFFFF000u + 15 * 60 * 1000 + 5) == 0);
+    reset(0);
+    radio_command("MODE BLUETOOTH", 0);
+    radio_tick(0, true);
+    CHECK(radio_bt_remaining_ms(123456) == UINT32_MAX); /* no limit */
+}
+
 static void test_announce_on_host_connect(void)
 {
     reset(0);
@@ -400,6 +464,8 @@ int main(int argc, char **argv)
     test_failures_fall_back_to_wifi();
     test_emitters();
     test_classic_mode();
+    test_lcd_bt();
+    test_remaining();
     run_ble_tests();
     run_classic_tests();
     if (failures) {
