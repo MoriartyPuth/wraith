@@ -153,3 +153,11 @@ export interface GATTItem {
   uuid: string; service_uuid?: string; handle?: number; start_handle?: number; end_handle?: number;
   primary?: boolean; properties?: string[]; discovered_at: number; event_id: string;
 }
+
+/** GET /coverage: what each sensor's radio was doing over a window. */
+export interface CoverageSegment { from: number; to: number; kind: "wifi" | "bluetooth" | "no_data"; classic?: boolean }
+export interface SensorCoverage { sensor_id: string; segments: CoverageSegment[]; totals_ms: Record<string, number> }
+export interface Coverage { since: number; until: number; gap_threshold_ms: number; sensors: SensorCoverage[] }
+
+/** GET /search: one match across access points, clients and Bluetooth devices. */
+export interface SearchHit { kind: "access_point" | "client" | "bt_device"; id: string; title: string; detail: string; last_seen: number }

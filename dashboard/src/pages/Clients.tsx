@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../services/api";
 import { useApi } from "../hooks/useApi";
@@ -10,7 +10,9 @@ import { timeAgo } from "../utils/format";
 export default function Clients() {
   const [params, setParams] = useSearchParams();
   const bssid = (params.get("bssid") || "").toUpperCase();
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(params.get("q") ?? ""); // ?q= from global search
+  const urlQ = params.get("q");
+  useEffect(() => { if (urlQ !== null) setQ(urlQ); }, [urlQ]);
   const clients = useApi((s) => api.clients(bssid || undefined, 500, 0, s), 30000, [bssid]);
   useLiveRefresh(["client"], clients.reload, 3000);
 

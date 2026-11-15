@@ -100,7 +100,7 @@ func TestBLEFloodPopupSpam(t *testing.T) {
 	obs(advert(addr(21), "0109", 0x0006), 10)
 	obs(discovered(40), 10)
 	obs(advert(addr(40), "0301ff", 0x0006), 10) // Microsoft, but not Swift Pair (03 00 80)
-	for i := 10; i < 28; i++ { // + addr 40 above = 29 new addresses
+	for i := 10; i < 28; i++ {                  // + addr 40 above = 29 new addresses
 		obs(discovered(i), 11)
 	}
 	if len(got) != 0 {

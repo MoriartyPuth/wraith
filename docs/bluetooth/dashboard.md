@@ -12,7 +12,22 @@ Sensors, Event History, Settings). All earlier URLs are unchanged. The master
 overview shows sensor/AP/Bluetooth/finding totals, each sensor's radio mode
 and what it means for coverage, one summary card per radio linking to its
 section, the latest findings tagged Wi-Fi or Bluetooth, and recent activity
-from both radios. Code: `dashboard/src/pages/bluetooth/`,
+from both radios.
+
+**Radio coverage** (master overview; `GET /api/v1/coverage`): one bar per
+sensor over 6 h / 24 h / 7 d showing Wi-Fi monitoring, Bluetooth (BLE
+passive), Bluetooth + Classic inquiry (transmits) and *no data* (no heartbeat
+for > 20 s: sensor offline, link down or Core stopped), with totals and
+hover times. It is built from `bluetooth.system.status` reports and heartbeat
+gaps (`core/internal/coverage`), so it shows when an absence of events from a
+radio carries no meaning.
+
+**Global search** (header, `/` to focus; `GET /api/v1/search?q=`): access
+points by SSID or BSSID, clients by MAC, Bluetooth devices by name or
+address; addresses match with any separator or none (`e40cfd`, `E4:0C`,
+`e4-0c-fd`) and LIKE wildcards are literal. Up to 8 per kind, newest first;
+arrows + Enter or click open the AP page, the Clients list filtered to that
+MAC (`/clients?q=`), or the Bluetooth device page. Code: `dashboard/src/pages/bluetooth/`,
 `dashboard/src/components/bluetooth/`, logic in `dashboard/src/utils/bluetooth.ts`.
 
 | Route | Page |

@@ -5,6 +5,7 @@ import { api } from "../services/api";
 import { useLive } from "../services/live";
 import { isDemo, setDemo } from "../services/mode";
 import { Loading } from "../components/ui";
+import { GlobalSearch } from "../components/GlobalSearch";
 
 type NavItem = { to: string; label: string };
 type NavGroup = { title: string | null; short?: string; items: NavItem[] };
@@ -102,7 +103,8 @@ export function Shell() {
               Core {coreOk ? "connected" : checking ? "checking…" : "unreachable"}</span>
             <span className="flex items-center gap-2"><Dot tone={live.state === "open" ? "good" : live.state === "demo" ? "off" : live.state === "connecting" ? "warn" : "bad"} />
               Stream {streamText}</span>
-            <span className={`ml-auto rounded border px-1.5 py-0.5 font-medium ${demo ? "border-warn/50 text-warn" : "border-good/40 text-good"}`}>
+            <span className="order-last w-full sm:order-none sm:ml-auto sm:w-auto"><GlobalSearch /></span>
+            <span className={`ml-auto rounded border px-1.5 py-0.5 font-medium sm:ml-0 ${demo ? "border-warn/50 text-warn" : "border-good/40 text-good"}`}>
               {demo ? "DEMO DATA" : "LIVE DATA"}
             </span>
           </header>

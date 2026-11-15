@@ -115,6 +115,8 @@ func (h *handlers) routes(r chi.Router) {
 		r.Get("/capture/status", h.captureStatus)
 		r.Get("/capture/interfaces", h.captureInterfaces)
 		r.Get("/statistics", h.statistics)
+		r.Get("/coverage", h.coverage)
+		r.Get("/search", h.search)
 		r.Post("/tx", h.txSend)
 		r.Post("/tx/stop", h.txStop)
 		h.btRoutes(r)

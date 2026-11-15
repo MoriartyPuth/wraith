@@ -5,6 +5,7 @@ import { useApi } from "../hooks/useApi";
 import { useLive, useLiveRefresh } from "../services/live";
 import { Async, Badge, Empty, Panel, PageHeader, Stat } from "../components/ui";
 import { SeverityBadge } from "../components/badges";
+import { CoverageTimeline } from "../components/CoverageTimeline";
 import { describeEvent } from "../utils/describe";
 import { clockTime, duration, timeAgo } from "../utils/format";
 import { coexistence, isBluetoothFinding, scanStateLabel, splitFindings } from "../utils/bluetooth";
@@ -97,6 +98,10 @@ export default function Overview() {
             </ul>
           )}
         </Async>
+      </Panel>
+
+      <Panel title="Radio coverage" className="mt-4">
+        <CoverageTimeline />
       </Panel>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">

@@ -1,7 +1,7 @@
 // Fabricated demo dataset. Every BSSID uses the locally administered 02:DE
 // prefix and every SSID/explanation is marked "Demo", so demo data can never
 // be mistaken for an observation. Deterministic (seeded PRNG).
-import type {
+import type { Coverage, CoverageSegment,
   AccessPoint, BTDevice, BTObservation, BTStatus, Client, Finding, GATTItem, Health, Observation, ProviderStatus, Sensor,
   Statistics, StoredEvent, SystemInfo,
 } from "../types/api";
@@ -203,3 +203,21 @@ events.push(
   btEv("bluetooth.system.status", BT_END, { state: "idle", mode: "wifi", message: "Demo: switched back to Wi-Fi mode" }),
 );
 events.sort((a, b) => b.received_at - a.received_at);
+
+/** Demo radio coverage: Wi-Fi, one Bluetooth + Classic session 2 h ago and a
+ * short outage — fabricated like the rest of this file. */
+export function coverage(since?: number, until?: number): Coverage {
+  const u = until ?? T0, s = since ?? u - 24 * 3600_000;
+  const bt0 = u - 2 * 3600_000, bt1 = bt0 + 15 * 60_000, gap0 = u - 6 * 3600_000, gap1 = gap0 + 10 * 60_000;
+  const segments: CoverageSegment[] = [
+    { from: s, to: gap0, kind: "wifi" }, { from: gap0, to: gap1, kind: "no_data" },
+    { from: gap1, to: bt0, kind: "wifi" }, { from: bt0, to: bt1, kind: "bluetooth", classic: true },
+    { from: bt1, to: u, kind: "wifi" },
+  ].filter((x) => x.to > s && x.from < u).map((x) => ({ ...x, from: Math.max(s, x.from), to: Math.min(u, x.to) })) as CoverageSegment[];
+  const totals: Record<string, number> = { wifi: 0, bluetooth: 0, no_data: 0, classic: 0 };
+  for (const x of segments) {
+    totals[x.kind] = (totals[x.kind] ?? 0) + x.to - x.from;
+    if (x.classic) totals.classic = (totals.classic ?? 0) + x.to - x.from;
+  }
+  return { since: s, until: u, gap_threshold_ms: 20000, sensors: [{ sensor_id: SENSOR, segments, totals_ms: totals }] };
+}

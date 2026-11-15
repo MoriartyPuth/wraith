@@ -1,11 +1,12 @@
 // Centralized WRAITH Core API client. In demo mode every call is answered
 // from the labelled demo dataset instead of the network.
 import type {
-  AccessPoint, ApiErrorBody, BTDevice, BTObservation, BTStatus, BTTransport, Client, EventQuery, Finding, GATTItem, Health,
+  AccessPoint, ApiErrorBody, BTDevice, Coverage, SearchHit, BTObservation, BTStatus, BTTransport, Client, EventQuery, Finding, GATTItem, Health,
   Observation, One, Paged, ProviderStatus, Sensor, Statistics, StoredEvent, SystemInfo, TxAccepted, TxRequest,
   WirelessInterface,
 } from "../types/api";
 import { isDemo } from "./mode";
+import { demoSearch } from "../utils/overview";
 import * as demo from "./demo";
 
 export class ApiError extends Error {
@@ -70,6 +71,18 @@ export const api = {
   health: (s?: AbortSignal) => (isDemo() ? resolve(demo.health) : get<Health>("/health", s)),
   systemInfo: (s?: AbortSignal) => (isDemo() ? resolve(demo.info) : get<SystemInfo>("/system/info", s)),
   statistics: (s?: AbortSignal) => (isDemo() ? resolve(demo.statistics()) : get<Statistics>("/statistics", s)),
+  /** Radio coverage per sensor over [since, until) (Unix ms; Core defaults to the last 24 h). */
+  coverage: (since?: number, until?: number, s?: AbortSignal) => {
+    if (isDemo()) return resolve({ data: demo.coverage(since, until) });
+    const q = new URLSearchParams();
+    if (since !== undefined) q.set("since", String(Math.floor(since)));
+    if (until !== undefined) q.set("until", String(Math.floor(until)));
+    return get<One<Coverage>>(`/coverage?${q}`, s);
+  },
+  /** Global search across access points, clients and Bluetooth devices (q: 2-64 chars). */
+  search: (q: string, s?: AbortSignal) =>
+    isDemo() ? resolve({ data: demoSearch(q, demo.aps, demo.clients, demo.btDevices), per_kind_limit: 8 })
+      : get<{ data: SearchHit[]; per_kind_limit: number }>(`/search?q=${encodeURIComponent(q)}`, s),
   captureStatus: (s?: AbortSignal) =>
     isDemo() ? resolve({ data: demo.providers }) : get<{ data: ProviderStatus[] }>("/capture/status", s),
   captureInterfaces: (s?: AbortSignal) =>
