@@ -34,6 +34,9 @@ type Context struct {
 	// PrevAP is the AP row before this event was applied (nil if the BSSID
 	// was unknown or the event has no BSSID). CurAP is the row after.
 	PrevAP, CurAP *storage.AccessPoint
+	// PrevBT / CurBT: the Bluetooth device row before and after a bluetooth.*
+	// device event (PrevBT nil for a new address; both nil otherwise).
+	PrevBT, CurBT *storage.BTDevice
 	Lookup        Lookup
 	Now           time.Time
 	// CoreUptime is how long Core has been ingesting. Cross-AP detectors
@@ -49,6 +52,7 @@ type Finding struct {
 	Confidence     float64
 	Classification string
 	BSSID          string
+	BTDevice       string // storage.BTDeviceID, for findings about a Bluetooth device
 	Explanation    string
 	Limitations    string
 	Evidence       []string
@@ -74,6 +78,9 @@ func NewEngine() *Engine {
 		newSecurityChangeDetector(),
 		newRogueAPDetector(),
 		newPMFInvalidDetector(),
+		newBLEFloodDetector(),
+		newTrackerDetector(),
+		newBTIdentityDetector(),
 	}}
 }
 
@@ -98,6 +105,11 @@ func toStored(f Finding, c *Context) storage.Finding {
 		b := f.BSSID
 		bssid = &b
 	}
+	var btDev *string
+	if f.BTDevice != "" {
+		b := f.BTDevice
+		btDev = &b
+	}
 	ev := f.Evidence
 	if len(ev) > 64 {
 		ev = ev[len(ev)-64:]
@@ -107,7 +119,7 @@ func toStored(f Finding, c *Context) storage.Finding {
 	}
 	return storage.Finding{
 		ID: newID(), Category: f.Category, Severity: f.Severity, Confidence: f.Confidence,
-		Classification: f.Classification, BSSID: bssid, SensorID: &sensor,
+		Classification: f.Classification, BSSID: bssid, BTDevice: btDev, SensorID: &sensor,
 		Explanation: f.Explanation, Limitations: f.Limitations, Evidence: ev,
 		Status: "open", CreatedAt: now, UpdatedAt: now,
 	}

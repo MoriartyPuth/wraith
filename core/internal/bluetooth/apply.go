@@ -18,13 +18,27 @@ func IsBluetooth(eventType string) bool { return strings.HasPrefix(eventType, "b
 // seenMS Core's receive time. It returns the device row it wrote, or nil for
 // events that do not describe a device (status, error, connection, GATT).
 func Apply(ctx context.Context, tx *storage.Tx, ev *events.Event, eventRow, seenMS int64) (*storage.BTDevice, error) {
+	_, cur, err := ApplyWithPrev(ctx, tx, ev, eventRow, seenMS)
+	return cur, err
+}
+
+// ApplyWithPrev is Apply that also returns the device row as it was before
+// this event (nil if the address was new or the event names no device), so
+// detectors can compare before and after.
+func ApplyWithPrev(ctx context.Context, tx *storage.Tx, ev *events.Event, eventRow, seenMS int64) (prev, cur *storage.BTDevice, err error) {
+	var p *storage.BTDevice
+	cur, err = apply(ctx, tx, ev, eventRow, seenMS, &p)
+	return p, cur, err
+}
+
+func apply(ctx context.Context, tx *storage.Tx, ev *events.Event, eventRow, seenMS int64, prevOut **storage.BTDevice) (*storage.BTDevice, error) {
 	switch ev.Type {
 	case events.TypeBtClassicDiscovered, events.TypeBtClassicUpdated:
 		var m ClassicMeta
 		if err := ev.DecodeMeta(&m); err != nil {
 			return nil, err
 		}
-		return upsert(ctx, tx, ev, eventRow, Sighting{
+		return upsert(ctx, tx, ev, eventRow, prevOut, Sighting{
 			Transport: storage.BTClassic, Address: m.Address, Name: m.Name, CoD: m.CoD,
 			DeviceClass: m.DeviceClass, RSSI: m.RSSI, Count: countOr(m.Count, 1),
 			Seen: seenMS, Sensor: ev.SensorID,
@@ -36,7 +50,7 @@ func Apply(ctx context.Context, tx *storage.Tx, ev *events.Event, eventRow, seen
 			return nil, err
 		}
 		rssi := m.RSSI
-		return upsert(ctx, tx, ev, eventRow, Sighting{
+		return upsert(ctx, tx, ev, eventRow, prevOut, Sighting{
 			Transport: storage.BTBLE, Address: m.Address, AddressType: m.AddressType,
 			Name: m.Name, TxPower: m.TxPower, Services: m.Services,
 			ManufacturerID: m.ManufacturerID, RSSI: &rssi, Count: countOr(m.Count, 1),
@@ -48,7 +62,7 @@ func Apply(ctx context.Context, tx *storage.Tx, ev *events.Event, eventRow, seen
 		if err := ev.DecodeMeta(&m); err != nil {
 			return nil, err
 		}
-		return upsert(ctx, tx, ev, eventRow, Sighting{
+		return upsert(ctx, tx, ev, eventRow, prevOut, Sighting{
 			Transport: storage.BTBLE, Address: m.Address, AddressType: m.AddressType,
 			Name: m.Name, Services: m.Services, ManufacturerID: m.ManufacturerID,
 			Classification: m.Classification, Confidence: m.Confidence, RSSI: m.RSSI,
@@ -95,12 +109,15 @@ func Apply(ctx context.Context, tx *storage.Tx, ev *events.Event, eventRow, seen
 	return nil, fmt.Errorf("bluetooth: unhandled event type %q", ev.Type)
 }
 
-func upsert(ctx context.Context, tx *storage.Tx, ev *events.Event, eventRow int64, s Sighting) (*storage.BTDevice, error) {
+func upsert(ctx context.Context, tx *storage.Tx, ev *events.Event, eventRow int64, prevOut **storage.BTDevice, s Sighting) (*storage.BTDevice, error) {
 	var prev *storage.BTDevice
 	p, err := tx.GetBTDevice(ctx, s.Transport, s.Address, s.AddressType)
 	switch {
 	case err == nil:
 		prev = &p
+		pc := p // Merge may share slices with prev; hand out an independent copy
+		pc.Services = append([]string(nil), p.Services...)
+		*prevOut = &pc
 	case !errors.Is(err, storage.ErrNotFound):
 		return nil, err
 	}

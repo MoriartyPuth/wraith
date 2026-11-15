@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"sync"
+	"strings"
 	"testing"
 	"time"
 
@@ -487,5 +488,65 @@ func TestBluetoothStreamThrottled(t *testing.T) {
 	}
 	if s := pub.last[stream.KindBTStatus].(storage.BTSensorStatus); *s.Mode != "wifi" {
 		t.Fatalf("bt_status payload: %+v", s)
+	}
+}
+
+// BT-10 through the real pipeline: a Classic device renamed between
+// sightings becomes a finding that names the device (bt_device, no BSSID);
+// a Core restart does not duplicate it, and the Wi-Fi tables stay empty.
+func TestBluetoothFindingStoredAndDeduped(t *testing.T) {
+	p, st, _ := setup(t)
+	ctx := context.Background()
+	seq := 0
+	v4 := func(boot, typ, meta string) *events.Event {
+		seq++
+		raw := fmt.Sprintf(`{"version":4,"event_id":"%s-%d","source":"wraith-nano","sensor_id":"nano-70b2a8","event_type":"%s","timestamp":0,"seq":%d,"metadata":%s}`,
+			boot, seq, typ, seq, meta)
+		ev, err := events.Parse([]byte(raw))
+		if err != nil {
+			t.Fatalf("fixture invalid: %v\n%s", err, raw)
+		}
+		return ev
+	}
+	const A = "E4:0C:FD:77:F9:84"
+	feed(t, p,
+		v4("b7000001", events.TypeBtClassicDiscovered, `{"address":"`+A+`","name":"OPPO A54","cod":5898764,"rssi":-90,"count":1}`),
+		v4("b7000001", events.TypeBtClassicUpdated, `{"address":"`+A+`","name":"OPPO A54","cod":5898764,"rssi":-91,"count":2,"window_ms":30000}`),
+		v4("b7000001", events.TypeBtClassicUpdated, `{"address":"`+A+`","name":"Galaxy Buds","cod":5898764,"rssi":-91,"count":1,"window_ms":1}`),
+	)
+	fs, n, err := st.ListFindings(ctx, storage.Page{Limit: 10})
+	if err != nil || n != 1 {
+		t.Fatalf("findings: %v n=%d %+v", err, n, fs)
+	}
+	f := fs[0]
+	if f.Category != "bt_identity_change" || f.BTDevice == nil || *f.BTDevice != "classic:"+A || f.BSSID != nil ||
+		len(f.Evidence) != 1 || !strings.Contains(f.Explanation, `"OPPO A54" to "Galaxy Buds"`) {
+		t.Fatalf("finding: %+v", f)
+	}
+	// The device row the finding points to exists and carries the new name.
+	d, err := st.GetBTDevice(ctx, storage.BTClassic, A, "")
+	if err != nil || d.ID != *f.BTDevice || *d.Name != "Galaxy Buds" || d.Observations != 4 {
+		t.Fatalf("device: %+v %v", d, err)
+	}
+	// Restart (fresh detector state): the same change again is deduplicated.
+	p2 := New(st, detection.NewEngine(), nil, p.log)
+	feed(t, p2,
+		v4("b7000002", events.TypeBtClassicUpdated, `{"address":"`+A+`","name":"OPPO A54","cod":5898764,"count":1}`),
+		v4("b7000002", events.TypeBtClassicUpdated, `{"address":"`+A+`","name":"Galaxy Buds","cod":5898764,"count":1}`),
+	)
+	if _, n, _ := st.ListFindings(ctx, storage.Page{Limit: 10}); n != 1 || p2.Deduped.Load() < 1 {
+		t.Fatalf("after restart: findings=%d deduped=%d", n, p2.Deduped.Load())
+	}
+	// A different device's finding is not suppressed by that dedup.
+	const B2 = "E4:0C:FD:77:F9:85"
+	feed(t, p2,
+		v4("b7000002", events.TypeBtClassicDiscovered, `{"address":"`+B2+`","name":"Car Kit","cod":2360324,"count":1}`),
+		v4("b7000002", events.TypeBtClassicUpdated, `{"address":"`+B2+`","name":"Speaker","cod":2360324,"count":1}`),
+	)
+	if _, n, _ := st.ListFindings(ctx, storage.Page{Limit: 10}); n != 2 {
+		t.Fatalf("second device: findings=%d", n)
+	}
+	if _, aps, _ := st.ListAccessPoints(ctx, storage.Page{Limit: 10}); aps != 0 {
+		t.Fatalf("bluetooth findings created %d AP rows", aps)
 	}
 }

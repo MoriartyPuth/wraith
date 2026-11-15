@@ -10,6 +10,18 @@ export function btDeviceHref(id: string): string {
   return `/bluetooth/devices/${encodeURIComponent(id)}`;
 }
 
+/** Bluetooth detector categories (docs/detection.md "Bluetooth"). */
+export function isBluetoothFinding(category: string): boolean {
+  return category.startsWith("bt_") || category.startsWith("ble_");
+}
+
+/** "classic:AA:.." -> "AA:.. (Classic)", "ble:random:AA:.." -> "AA:.. (BLE random)". */
+export function btDeviceLabel(id: string): string {
+  const m = /^(classic|ble):(?:(public|random):)?([0-9A-F]{2}(?::[0-9A-F]{2}){5})$/i.exec(id);
+  if (!m) return id;
+  return m[1] === "classic" ? `${m[3]} (Classic)` : `${m[3]} (BLE${m[2] ? ` ${m[2]}` : ""})`;
+}
+
 // Bluetooth SIG Company Identifiers (Assigned Numbers). Deliberately partial:
 // only well-known ids; the raw id is always shown alongside.
 const COMPANIES: Record<number, string> = {

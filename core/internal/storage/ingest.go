@@ -201,31 +201,31 @@ func (t *Tx) InsertObservation(ctx context.Context, eventRow int64, bssid, senso
 func (t *Tx) InsertFinding(ctx context.Context, f Finding) error {
 	ev, _ := json.Marshal(f.Evidence)
 	_, err := t.tx.ExecContext(ctx, `INSERT INTO findings(id, category, severity, confidence, classification, bssid,
-		sensor_id, explanation, limitations, evidence, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
-		f.ID, f.Category, f.Severity, f.Confidence, f.Classification, f.BSSID, f.SensorID,
+		bt_device, sensor_id, explanation, limitations, evidence, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
+		f.ID, f.Category, f.Severity, f.Confidence, f.Classification, f.BSSID, f.BTDevice, f.SensorID,
 		f.Explanation, f.Limitations, string(ev), f.CreatedAt, f.CreatedAt)
 	return err
 }
 
 // FindingExistsSince reports whether an open or recent finding with the same
-// category and BSSID was created at or after `since` (Unix ms). The pipeline
+// category, BSSID and Bluetooth device ("" = none) was created at or after
+// `since` (Unix ms). The pipeline
 // uses this to suppress duplicate findings across Core restarts, where the
 // detectors' in-memory dedup state has been lost.
-func (s *Store) FindingExistsSince(ctx context.Context, category, bssid string, since int64) (bool, error) {
+func (s *Store) FindingExistsSince(ctx context.Context, category, bssid, btDevice string, since int64) (bool, error) {
 	var n int
-	err := s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM findings WHERE category = ? AND IFNULL(bssid,'') = ? AND created_at >= ?`,
-		category, bssid, since).Scan(&n)
+	err := s.db.QueryRowContext(ctx, findingExistsSQL, category, bssid, btDevice, since).Scan(&n)
 	return n > 0, err
 }
 
+const findingExistsSQL = `SELECT COUNT(*) FROM findings WHERE category = ? AND IFNULL(bssid,'') = ?
+	AND IFNULL(bt_device,'') = ? AND created_at >= ?`
+
 // findingExistsSince is the transaction-scoped form used during ingestion.
-func (t *Tx) FindingExistsSince(ctx context.Context, category, bssid string, since int64) (bool, error) {
+func (t *Tx) FindingExistsSince(ctx context.Context, category, bssid, btDevice string, since int64) (bool, error) {
 	var n int
-	err := t.tx.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM findings WHERE category = ? AND IFNULL(bssid,'') = ? AND created_at >= ?`,
-		category, bssid, since).Scan(&n)
+	err := t.tx.QueryRowContext(ctx, findingExistsSQL, category, bssid, btDevice, since).Scan(&n)
 	return n > 0, err
 }
 

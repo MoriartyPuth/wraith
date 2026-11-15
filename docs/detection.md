@@ -48,6 +48,31 @@ Detector state (windows, cooldowns, warm-up) is in memory and resets when Core
 restarts. All thresholds are constants in the code; they are starting points
 and need tuning against real environments (Phase 6 false-positive evaluation).
 
+## Bluetooth detectors (BT-10)
+
+Status: **IMPLEMENTED — TESTED** (unit, pipeline integration, mutation
+checks); none triggered on real traffic yet. Code:
+`core/internal/detection/bluetooth.go`. A finding about one Bluetooth device
+carries `bt_device` (the `bt_devices` row id, e.g. `classic:AA:BB:…`,
+`ble:random:AA:BB:…`; migration `0006_bt_findings`) instead of a BSSID and
+links to the device page; the 6 h database de-duplication keys on category +
+BSSID + `bt_device`.
+
+An address is an observation, not a device: BLE random-address rotation is
+never a finding on its own, and no rule merges addresses.
+
+| ✅ | Category | Trigger | Classification / severity |
+|----|----------|---------|---------------------------|
+| ✅ | `ble_advertising_flood` | ≥ 30 **new** BLE addresses (`ble.device_discovered`) at one sensor within 60 s | suspicious / medium (0.5). If ≥ 10 of those addresses sent **pairing pop-up** adverts — Apple Continuity Proximity Pairing (`004C`, type `07`) or Nearby Action (`0F`), Microsoft Swift Pair (`0006`, `03 00 80`), Google Fast Pair (service `fe2c`) — → potential_attack / high (0.7): the BLE pop-up-spam pattern. One per sensor per 10 min. |
+| ✅ | `bt_tracker_separated` | a BLE address broadcasting Apple Find My's **separated-from-owner** advert (`004C`, `12 19…`) reported ≥ 3 times over ≥ 30 min (gaps of up to 2 h tolerated: Bluetooth sessions last ≤ 15 min). The near-owner form (`12 02…`, common on real data) is ignored. | suspicious / medium (0.5), once per address. Tile / SmartTag / Google Find My Device trackers are not recognised. |
+| ✅ | `bt_identity_change` | a stable address (Classic, or BLE `public`) changes its **name** (both known; one being a prefix of the other — shortened vs complete name — is ignored) or its Classic **device class** | name: observed / low (0.6); device class: suspicious / low (0.4). Once per device and kind per hour. |
+
+Baseline from the BT-6/BT-7 hardware runs: 15–24 BLE addresses over 8
+minutes in a residential setting, so 30 new per minute is far above it; busy
+public places were not measured and may need a higher threshold. Each finding
+states its limitations (crowds and address rotation for floods; neighbours'
+items for trackers; renames and spoofing for identity changes).
+
 ## Design notes (original contract)
 
 | Category | Evidence | Benign explanations it must account for |

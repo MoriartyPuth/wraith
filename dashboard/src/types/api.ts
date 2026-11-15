@@ -84,6 +84,8 @@ export type Classification = "observed" | "suspicious" | "potential_attack" | "c
 export interface Finding {
   id: string; category: string; severity: Severity; confidence: number;
   classification: Classification; bssid: string | null; sensor_id: string | null;
+  /** Bluetooth device row id ("classic:AA:.." / "ble:random:AA:..") for Bluetooth findings. */
+  bt_device?: string | null;
   explanation: string; limitations: string; evidence: string[]; status: "open" | "reviewed" | "dismissed";
   created_at: number; updated_at: number;
 }

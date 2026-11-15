@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BTDevice, StoredEvent } from "../types/api";
 import {
-  btDeviceHref, classicInquiryOn, coexistence, companyLabel, deviceFields, deviceSearchText, rssiHistogram, scanStateLabel, shortUUID, uuidName,
+  btDeviceHref, btDeviceLabel, classicInquiryOn, isBluetoothFinding, coexistence, companyLabel, deviceFields, deviceSearchText, rssiHistogram, scanStateLabel, shortUUID, uuidName,
 } from "./bluetooth";
 import { describeEvent } from "./describe";
 import * as demo from "../services/demo";
@@ -139,5 +139,14 @@ describe("demo Bluetooth data cannot pass for real observations", () => {
       expect(d.id).toBe(d.transport === "classic" ? `classic:${d.address}` : `ble:${d.address_type}:${d.address}`);
     }
     expect(demo.btStatus.devices.total).toBe(demo.btDevices.length);
+  });
+
+  it("btDeviceLabel names a finding's Bluetooth device", () => {
+    expect(btDeviceLabel("classic:E4:0C:FD:77:F9:84")).toBe("E4:0C:FD:77:F9:84 (Classic)");
+    expect(btDeviceLabel("ble:random:C3:11:22:33:44:55")).toBe("C3:11:22:33:44:55 (BLE random)");
+    expect(btDeviceLabel("ble:public:00:11:22:33:44:55")).toBe("00:11:22:33:44:55 (BLE public)");
+    expect(btDeviceLabel("garbage")).toBe("garbage");
+    expect(isBluetoothFinding("ble_advertising_flood") && isBluetoothFinding("bt_identity_change")).toBe(true);
+    expect(isBluetoothFinding("deauth_activity") || isBluetoothFinding("rogue_ap_indicator")).toBe(false);
   });
 });

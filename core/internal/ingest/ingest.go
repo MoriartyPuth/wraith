@@ -140,6 +140,7 @@ func (p *Pipeline) Handle(ctx context.Context, ev *events.Event) error {
 		ap        *storage.AccessPoint
 		clientRow *storage.Client
 		btDev     *storage.BTDevice
+		btPrev    *storage.BTDevice
 		findings  []storage.Finding
 		dup       bool
 	)
@@ -201,11 +202,11 @@ func (p *Pipeline) Handle(ctx context.Context, ev *events.Event) error {
 		// Bluetooth (protocol v4) has its own inventory, kept apart from the
 		// Wi-Fi state above: internal/bluetooth never touches AP or client rows.
 		if bluetooth.IsBluetooth(ev.Type) {
-			if btDev, err = bluetooth.Apply(ctx, tx, ev, row, nowMS); err != nil {
+			if btPrev, btDev, err = bluetooth.ApplyWithPrev(ctx, tx, ev, row, nowMS); err != nil {
 				return err
 			}
 		}
-		raw := p.det.Observe(&detection.Context{Event: ev, PrevAP: prev, CurAP: ap, Lookup: lookup{ctx, tx},
+		raw := p.det.Observe(&detection.Context{Event: ev, PrevAP: prev, CurAP: ap, PrevBT: btPrev, CurBT: btDev, Lookup: lookup{ctx, tx},
 			Now: ev.ReceivedAt, CoreUptime: p.now().Sub(p.start)})
 		// Suppress findings equivalent to one already stored recently, so a
 		// Core restart (which clears detectors' in-memory dedup) does not
@@ -217,7 +218,11 @@ func (p *Pipeline) Handle(ctx context.Context, ev *events.Event) error {
 			if f.BSSID != nil {
 				bssid = *f.BSSID
 			}
-			exists, err := tx.FindingExistsSince(ctx, f.Category, bssid, dedupSince)
+			btd := ""
+			if f.BTDevice != nil {
+				btd = *f.BTDevice
+			}
+			exists, err := tx.FindingExistsSince(ctx, f.Category, bssid, btd, dedupSince)
 			if err != nil {
 				return err
 			}

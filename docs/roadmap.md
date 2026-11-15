@@ -165,6 +165,6 @@ docs/bluetooth/architecture.md.
 | BT-7 | Firmware: bounded Classic inquiry + CoD/EIR parser (+ `MODE BLUETOOTH CLASSIC`, Core `classic` flag, dashboard control) | IMPLEMENTED — TESTED on host and on hardware 2026-11-15 (rnr 0, 20.2 % inquiry airtime, Classic + BLE counts reconcile exactly, no resets) |
 | BT-8 | Firmware: device trackers + v4 event emission | IMPLEMENTED — BLE in BT-6 (hardware-validated); Classic tracker with BT-7 (hardware-validated) |
 | BT-9 | Optional operator-initiated GATT discovery (off by default) | NOT IMPLEMENTED |
-| BT-10 | Bluetooth detection engine | NOT IMPLEMENTED |
+| BT-10 | Bluetooth detection engine: `ble_advertising_flood` (incl. pairing pop-up spam), `bt_tracker_separated` (Apple Find My separated mode), `bt_identity_change`; findings carry `bt_device` (migration 0006); dashboard links | IMPLEMENTED — TESTED (unit + pipeline + 15 mutation checks); not triggered on real traffic |
 | BT-11 | LCD Bluetooth screens via the existing LCD task | NOT IMPLEMENTED |
 | BT-12 | Hardware validation + Wi-Fi regression (mode switch both ways, heap, gaps) | BLOCKED — HARDWARE REQUIRED |

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../services/api";
 import { useApi } from "../hooks/useApi";
 import { useAPIndex } from "../hooks/useAPIndex";
@@ -8,6 +9,7 @@ import { BssidLink, SeverityBadge } from "../components/badges";
 import type { Finding } from "../types/api";
 import { describeEvent } from "../utils/describe";
 import { timeAgo } from "../utils/format";
+import { btDeviceHref, btDeviceLabel, isBluetoothFinding } from "../utils/bluetooth";
 
 function Evidence({ ids }: { ids: string[] }) {
   const ev = useApi((s) => api.events({ eventIds: ids }, 64, 0, s), undefined, [ids.join(",")]);
@@ -54,7 +56,11 @@ function FindingCard({ f, apSSID, onStatus }: { f: Finding; apSSID?: string; onS
       <p className="mt-2 text-sm">{f.explanation}</p>
       {f.limitations && <p className="mt-2 text-xs text-ink-3"><span className="font-medium text-ink-2">Limitations: </span>{f.limitations}</p>}
       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-ink-3">
-        <span>AP</span><BssidLink bssid={f.bssid} ssid={apSSID} />
+        {f.bt_device ? (
+          <><span>Bluetooth</span><Link className="font-mono hover:text-accent" to={btDeviceHref(f.bt_device)}>{btDeviceLabel(f.bt_device)}</Link></>
+        ) : f.bssid || !isBluetoothFinding(f.category) ? (
+          <><span>AP</span><BssidLink bssid={f.bssid} ssid={apSSID} /></>
+        ) : <span>Bluetooth (sensor-wide)</span>}
         <span className="ml-2">sensor <span className="font-mono">{f.sensor_id ?? "—"}</span></span>
         <span className="ml-2">{f.id}</span>
         <span className="ml-auto flex gap-2">

@@ -258,6 +258,7 @@ type Finding struct {
 	Confidence     float64  `json:"confidence"`
 	Classification string   `json:"classification"`
 	BSSID          *string  `json:"bssid"`
+	BTDevice       *string  `json:"bt_device"` // BTDeviceID of the Bluetooth device it is about
 	SensorID       *string  `json:"sensor_id"`
 	Explanation    string   `json:"explanation"`
 	Limitations    string   `json:"limitations"`
@@ -267,13 +268,13 @@ type Finding struct {
 	UpdatedAt      int64    `json:"updated_at"`
 }
 
-const findingCols = `id, category, severity, confidence, classification, bssid, sensor_id, explanation, limitations, evidence, status, created_at, updated_at`
+const findingCols = `id, category, severity, confidence, classification, bssid, bt_device, sensor_id, explanation, limitations, evidence, status, created_at, updated_at`
 
 func scanFinding(sc interface{ Scan(...any) error }) (Finding, error) {
 	var f Finding
 	var ev string
 	err := sc.Scan(&f.ID, &f.Category, &f.Severity, &f.Confidence, &f.Classification, &f.BSSID,
-		&f.SensorID, &f.Explanation, &f.Limitations, &ev, &f.Status, &f.CreatedAt, &f.UpdatedAt)
+		&f.BTDevice, &f.SensorID, &f.Explanation, &f.Limitations, &ev, &f.Status, &f.CreatedAt, &f.UpdatedAt)
 	if err == nil {
 		if jerr := json.Unmarshal([]byte(ev), &f.Evidence); jerr != nil {
 			f.Evidence = []string{}
