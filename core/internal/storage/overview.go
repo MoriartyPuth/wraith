@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"regexp"
 	"strconv"
@@ -209,4 +210,56 @@ func (s *Store) Search(ctx context.Context, q string, perKind int) ([]SearchHit,
 		return nil, err
 	}
 	return out, nil
+}
+
+// ---- app_config (key/value settings) ----
+
+// GetConfig returns the value stored under key, or ("", false) if unset.
+func (s *Store) GetConfig(ctx context.Context, key string) (string, bool, error) {
+	var v string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM app_config WHERE key = ?`, key).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	return v, err == nil, err
+}
+
+// SetConfig stores value under key (insert or replace).
+func (s *Store) SetConfig(ctx context.Context, key, value string) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO app_config(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		key, value)
+	return err
+}
+
+// AnySensorHasCapability reports whether any known sensor announced capability c.
+func (s *Store) AnySensorHasCapability(ctx context.Context, c string) (bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT capabilities FROM sensors`)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var caps string
+		if err := rows.Scan(&caps); err != nil {
+			return false, err
+		}
+		var list []string
+		if json.Unmarshal([]byte(caps), &list) == nil {
+			for _, x := range list {
+				if x == c {
+					return true, nil
+				}
+			}
+		}
+	}
+	return false, rows.Err()
+}
+
+// AnyRadioMode reports whether any sensor's last Bluetooth status had this
+// radio mode ("wifi" | "bluetooth").
+func (s *Store) AnyRadioMode(ctx context.Context, mode string) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM bt_sensor_status WHERE mode = ?`, mode).Scan(&n)
+	return n > 0, err
 }

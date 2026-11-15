@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/MoriartyPuth/wraith/core/internal/api"
+	"github.com/MoriartyPuth/wraith/core/internal/btschedule"
 	"github.com/MoriartyPuth/wraith/core/internal/capture"
 	"github.com/MoriartyPuth/wraith/core/internal/capture/serial"
 	"github.com/MoriartyPuth/wraith/core/internal/config"
@@ -114,9 +115,13 @@ func run(args []string) error {
 		log.Warn("deauth test transmission ENABLED: POST /api/v1/tx forwards deauth/disassoc bursts to the sensor; use only on networks you are authorized to test (docs/tx.md)")
 	}
 
+	sched := btschedule.New(ctx, store, scheduleEnv{mgr: mgr, store: store}, log, time.Now)
+	go sched.Run(ctx)
+
 	handler := api.NewRouter(api.Deps{
 		Store: store, Capture: mgr, Log: log, Started: time.Now(), AllowedHosts: cfg.AllowedHosts,
 		Stream:    hub,
+		Scheduler: sched,
 		TXEnabled: cfg.TXEnabled,
 		RuntimeStats: func() map[string]uint64 {
 			return map[string]uint64{

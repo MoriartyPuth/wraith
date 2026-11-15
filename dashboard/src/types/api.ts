@@ -161,3 +161,10 @@ export interface Coverage { since: number; until: number; gap_threshold_ms: numb
 
 /** GET /search: one match across access points, clients and Bluetooth devices. */
 export interface SearchHit { kind: "access_point" | "client" | "bt_device"; id: string; title: string; detail: string; last_seen: number }
+
+/** GET/PUT /bluetooth/schedule: unattended Bluetooth sessions (Core-driven). */
+export interface BTSchedule { enabled: boolean; every_minutes: number; duration_seconds: number; classic: boolean }
+export interface BTScheduleState {
+  schedule: BTSchedule; in_session: boolean; next_run?: number;
+  limits: { min_every_minutes: number; max_every_minutes: number; min_duration_seconds: number; max_duration_seconds: number };
+}

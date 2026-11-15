@@ -1,12 +1,15 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/MoriartyPuth/wraith/core/internal/btschedule"
 	"github.com/MoriartyPuth/wraith/core/internal/coverage"
 	"github.com/MoriartyPuth/wraith/core/internal/storage"
 )
@@ -117,4 +120,76 @@ func (h *handlers) search(w http.ResponseWriter, r *http.Request) {
 		hits = []storage.SearchHit{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": hits, "per_kind_limit": searchPerKind})
+}
+
+// ---- Bluetooth schedule ----
+
+// Scheduler is the daemon the handlers read and update (btschedule.Runner).
+type Scheduler interface {
+	Get() (cfg btschedule.Schedule, nextRun int64, nextOK, inSession bool)
+	Set(ctx context.Context, cfg btschedule.Schedule) error
+}
+
+// btSchedule reports the unattended-session schedule, its next run and
+// whether a scheduled session is running now.
+func (h *handlers) btSchedule(w http.ResponseWriter, r *http.Request) {
+	if h.d.Scheduler == nil {
+		writeErr(w, http.StatusServiceUnavailable, "unavailable", "the scheduler is not running")
+		return
+	}
+	cfg, nextRun, nextOK, inSession := h.d.Scheduler.Get()
+	writeJSON(w, http.StatusOK, map[string]any{"data": scheduleResponse(cfg, nextRun, nextOK, inSession)})
+}
+
+// btSetSchedule stores a new schedule. JSON-only (the same CSRF guard as /tx
+// and /bluetooth/mode: a scheduled session pauses Wi-Fi monitoring).
+func (h *handlers) btSetSchedule(w http.ResponseWriter, r *http.Request) {
+	if h.d.Scheduler == nil {
+		writeErr(w, http.StatusServiceUnavailable, "unavailable", "the scheduler is not running")
+		return
+	}
+	if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		writeErr(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "Content-Type must be application/json")
+		return
+	}
+	var cfg btschedule.Schedule
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 512))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&cfg); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid_body",
+			`expected {"enabled":bool,"every_minutes":int,"duration_seconds":int,"classic":bool}`)
+		return
+	}
+	if err := h.d.Scheduler.Set(r.Context(), cfg); err != nil {
+		if _, ok := err.(interface{ Error() string }); ok && isValidationErr(err) {
+			writeErr(w, http.StatusBadRequest, "invalid_body", err.Error())
+			return
+		}
+		internal(w, h.d.Log, err)
+		return
+	}
+	stored, nextRun, nextOK, inSession := h.d.Scheduler.Get()
+	writeJSON(w, http.StatusOK, map[string]any{"data": scheduleResponse(stored, nextRun, nextOK, inSession)})
+}
+
+func scheduleResponse(cfg btschedule.Schedule, nextRun int64, nextOK, inSession bool) map[string]any {
+	m := map[string]any{
+		"schedule":   cfg,
+		"in_session": inSession,
+		"limits": map[string]int{
+			"min_every_minutes": btschedule.MinEveryMinutes, "max_every_minutes": btschedule.MaxEveryMinutes,
+			"min_duration_seconds": btschedule.MinDurationSeconds, "max_duration_seconds": btschedule.MaxDurationSeconds,
+		},
+	}
+	if nextOK {
+		m["next_run"] = nextRun
+	}
+	return m
+}
+
+// isValidationErr distinguishes a bad-schedule error (client's fault) from a
+// storage error. Validation errors come only from Schedule.Validate.
+func isValidationErr(err error) bool {
+	s := err.Error()
+	return strings.Contains(s, "every_minutes") || strings.Contains(s, "duration_seconds")
 }

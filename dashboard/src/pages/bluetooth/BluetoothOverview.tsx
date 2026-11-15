@@ -9,6 +9,7 @@ import { ActiveBadge, BTDeviceLink, TransportBadge } from "../../components/blue
 import type { BTSensorStatus } from "../../types/api";
 import { breakdowns, CLASSIC_TX_WARNING, classicInquiryOn, coexistence, presence, rssiHistogram, scanStateLabel } from "../../utils/bluetooth";
 import { CategoryBars } from "../../components/bluetooth/CategoryBars";
+import { ScheduleControl } from "../../components/bluetooth/ScheduleControl";
 import { timeAgo } from "../../utils/format";
 
 const HIST_LIMIT = 500;
@@ -122,7 +123,9 @@ export default function BluetoothOverview() {
         </Async>
       </Panel>
 
-      <Panel title={`Near now · heard in the last ${NEAR_WINDOW_MS / 60000} min`} className="mt-4"
+<ScheduleControl />
+
+            <Panel title={`Near now · heard in the last ${NEAR_WINDOW_MS / 60000} min`} className="mt-4"
         action={<span className="text-xs text-ink-3">{near.length} device{near.length === 1 ? "" : "s"}</span>}>
         <Async state={devices} isEmpty={() => near.length === 0}
           empty="No device heard in the last few minutes. Bluetooth is only scanned while the radio is in Bluetooth mode.">

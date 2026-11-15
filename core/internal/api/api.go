@@ -40,6 +40,8 @@ type Deps struct {
 	// TXEnabled reflects config.TXEnabled: whether POST /api/v1/tx is
 	// available (deauth test transmission, docs/tx.md).
 	TXEnabled bool
+	// Scheduler drives unattended Bluetooth sessions (GET/PUT /bluetooth/schedule); nil disables them.
+	Scheduler Scheduler
 	// Now is the clock (tests).
 	Now func() time.Time
 }
@@ -117,6 +119,8 @@ func (h *handlers) routes(r chi.Router) {
 		r.Get("/statistics", h.statistics)
 		r.Get("/coverage", h.coverage)
 		r.Get("/search", h.search)
+		r.Get("/bluetooth/schedule", h.btSchedule)
+		r.Put("/bluetooth/schedule", h.btSetSchedule)
 		r.Post("/tx", h.txSend)
 		r.Post("/tx/stop", h.txStop)
 		h.btRoutes(r)

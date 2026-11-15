@@ -1,7 +1,7 @@
 // Centralized WRAITH Core API client. In demo mode every call is answered
 // from the labelled demo dataset instead of the network.
 import type {
-  AccessPoint, ApiErrorBody, BTDevice, Coverage, SearchHit, BTObservation, BTStatus, BTTransport, Client, EventQuery, Finding, GATTItem, Health,
+  AccessPoint, ApiErrorBody, BTDevice, BTScheduleState, BTSchedule, Coverage, SearchHit, BTObservation, BTStatus, BTTransport, Client, EventQuery, Finding, GATTItem, Health,
   Observation, One, Paged, ProviderStatus, Sensor, Statistics, StoredEvent, SystemInfo, TxAccepted, TxRequest,
   WirelessInterface,
 } from "../types/api";
@@ -183,6 +183,16 @@ export const api = {
     const body = classic === undefined ? { mode } : { mode, classic };
     return request<One<{ mode: string; classic: boolean; command: string; note: string }>>("/bluetooth/mode", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+  },
+
+  /** Unattended Bluetooth session schedule (Core-driven; pauses Wi-Fi during each session). */
+  btSchedule: (s?: AbortSignal) =>
+    isDemo() ? resolve({ data: demo.btSchedule() }) : get<One<BTScheduleState>>("/bluetooth/schedule", s),
+  btSetSchedule: (schedule: BTSchedule) => {
+    if (isDemo()) return Promise.reject(new ApiError(503, "demo", "the scheduler is not available in demo mode"));
+    return request<One<BTScheduleState>>("/bluetooth/schedule", {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(schedule),
     });
   },
 

@@ -1,7 +1,7 @@
 // Fabricated demo dataset. Every BSSID uses the locally administered 02:DE
 // prefix and every SSID/explanation is marked "Demo", so demo data can never
 // be mistaken for an observation. Deterministic (seeded PRNG).
-import type { Coverage, CoverageSegment,
+import type { BTScheduleState, Coverage, CoverageSegment,
   AccessPoint, BTDevice, BTObservation, BTStatus, Client, Finding, GATTItem, Health, Observation, ProviderStatus, Sensor,
   Statistics, StoredEvent, SystemInfo,
 } from "../types/api";
@@ -220,4 +220,12 @@ export function coverage(since?: number, until?: number): Coverage {
     if (x.classic) totals.classic = (totals.classic ?? 0) + x.to - x.from;
   }
   return { since: s, until: u, gap_threshold_ms: 20000, sensors: [{ sensor_id: SENSOR, segments, totals_ms: totals }] };
+}
+
+
+/** Demo schedule: off by default, a 5-min BLE session every hour. */
+export function btSchedule(): BTScheduleState {
+  return { schedule: { enabled: false, every_minutes: 60, duration_seconds: 300, classic: false },
+    in_session: false,
+    limits: { min_every_minutes: 1, max_every_minutes: 1440, min_duration_seconds: 10, max_duration_seconds: 600 } };
 }
