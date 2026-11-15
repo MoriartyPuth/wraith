@@ -234,6 +234,28 @@ unknown-RSSI handling. 9 mutation checks, all caught.
 **Hardware (2026-11-15):** flashed, Bluetooth mode with Classic inquiry; the
 operator confirmed all four screens render correctly on the 16x2 LCD.
 
+## Full hardware regression (BT-12, 2026-11-15/16, nano-70b2a8)
+
+One scripted 36-minute run through Core's API on boot `5e245308` (no reset
+from start to end), plus a repeat of the host-loss step:
+
+| Phase | Result |
+|-------|--------|
+| Wi-Fi baseline (2 min) | 116 Wi-Fi events/min |
+| 10 switch cycles (60 s Bluetooth / 30 s Wi-Fi, alternating BLE-only and BLE + Classic, Classic toggled on and off in place) | all confirmed; command → status median 1.8 s, max 2.8 s; Wi-Fi events resume within 110 ms of the return (median 28 ms) |
+| Wi-Fi isolation | **0** Wi-Fi events while in Bluetooth mode |
+| Host loss (Core stopped 25 s in Bluetooth + Classic) | sensor fell back to Wi-Fi on its own; on reconnect it announced `host connected; Wi-Fi mode`; the events it sent while nothing was listening (61, incl. the session's stop totals) are lost on the wire, as designed |
+| Session limit (16 min requested) | returned by itself at 15:00 with `Bluetooth session limit reached`; 30 Classic slots, 180.7 s of inquiry = 20.1 % |
+| Wi-Fi after everything (2 min) | 114 events/min (baseline 116) |
+| Counts | Classic: 11/11 sessions reconcile exactly. BLE: 10 exact; 2 short by exactly the counts in 5 lines lost on the USB path (4 and 1) — both losses recorded as sequence gaps (gap count 43 → 48), never silent |
+| Classic safety | 41 slot reports: `rnr` 0, `recancel` 0, `qdrop` 0 |
+| Heap / stack | steady state identical every cycle: 93 444 B free in Bluetooth mode, 86 548 B in Wi-Fi mode (no leak). Lowest since boot 63.9 KB through all ten cycles, 55.8 KB once during the first host-loss fallback (a repeat did not lower it further). Radio task stack ≥ 3 476 B free. |
+
+Observed quirk: on a return to Wi-Fi the first Wi-Fi events (≈ 0.3 s) are
+sent before the `Wi-Fi mode (...)` status line, because the monitor restarts
+before the status is emitted. Consumers should use event order with care
+around a switch; Core is unaffected (it stores both).
+
 ## Not tested yet
 
 - Classic inquiry with many discoverable devices (only one was present), and
