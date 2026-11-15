@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BTDevice, StoredEvent } from "../types/api";
 import {
-  btDeviceHref, btDeviceLabel, classicInquiryOn, isBluetoothFinding, splitFindings, coexistence, companyLabel, deviceFields, deviceSearchText, rssiHistogram, scanStateLabel, shortUUID, uuidName,
+  breakdowns, btDeviceHref, btDeviceLabel, classicInquiryOn, isBluetoothFinding, presence, splitFindings, coexistence, companyLabel, deviceFields, deviceSearchText, rssiHistogram, scanStateLabel, shortUUID, uuidName,
 } from "./bluetooth";
 import { describeEvent } from "./describe";
 import * as demo from "../services/demo";
@@ -159,5 +159,57 @@ describe("demo Bluetooth data cannot pass for real observations", () => {
     ]);
     expect(r).toEqual({ wifi: { open: 1, total: 2 }, bluetooth: { open: 1, total: 2 }, openHigh: 1 });
     expect(splitFindings([])).toEqual({ wifi: { open: 0, total: 0 }, bluetooth: { open: 0, total: 0 }, openHigh: 0 });
+  });
+});
+
+describe("bluetooth breakdowns and presence", () => {
+  const dev = (o: Partial<BTDevice>): BTDevice => ({
+    id: o.id ?? "x", transport: "ble", address: "AA:BB:CC:00:00:01", address_type: "random", name: null,
+    cod: null, device_class: null, classification: null, confidence: null, manufacturer_id: null, tx_power: null,
+    services: [], last_rssi: null, rssi_avg: null, observations: 1, first_seen: 0, last_seen: 0, last_sensor: null, ...o,
+  });
+
+  it("breaks devices down by transport, address type, manufacturer, class", () => {
+    const devices = [
+      dev({ transport: "ble", address_type: "random", manufacturer_id: 0x004c, classification: "beacon" }),
+      dev({ transport: "ble", address_type: "public", manufacturer_id: 0x004c }),
+      dev({ transport: "ble", address_type: "random", manufacturer_id: 0x0006 }),
+      dev({ transport: "ble", address_type: "random", manufacturer_id: null }),
+      dev({ transport: "classic", address_type: "", device_class: "phone" }),
+      dev({ transport: "classic", address_type: "", device_class: "audio" }),
+    ];
+    const bd = breakdowns(devices);
+    const by = Object.fromEntries(bd.map((b) => [b.title, b]));
+    expect(by["Transport"]!.categories).toEqual([{ label: "BLE", count: 4 }, { label: "Classic", count: 2 }]);
+    expect(by["BLE address type"]!.total).toBe(4);
+    expect(by["BLE address type"]!.categories).toEqual([{ label: "Random", count: 3 }, { label: "Public", count: 1 }]);
+    // Manufacturer counts only BLE devices that reported one; Apple named, Microsoft named.
+    expect(by["BLE manufacturer"]!.total).toBe(3);
+    expect(by["BLE manufacturer"]!.categories.map((c) => c.label)).toEqual(["Apple", "Microsoft"]);
+    expect(by["Classic device class"]!.categories).toEqual([{ label: "Audio", count: 1 }, { label: "Phone", count: 1 }]);
+    expect(by["BLE classification"]!.categories).toEqual([{ label: "Beacon", count: 1 }]);
+    expect(breakdowns([])).toEqual([]);
+  });
+
+  it("caps long category lists into Other", () => {
+    const devices = Array.from({ length: 10 }, (_, i) => dev({ transport: "classic", address_type: "", device_class: `c${i}` }));
+    const bd = breakdowns(devices);
+    const cls = bd.find((b) => b.title === "Classic device class")!;
+    expect(cls.categories).toHaveLength(6);
+    expect(cls.categories[5]!.label).toBe("Other");
+    expect(cls.categories[5]!.count).toBe(5);
+    expect(cls.categories.reduce((a, c) => a + c.count, 0)).toBe(10);
+  });
+
+  it("presence keeps recent devices, strongest signal first", () => {
+    const now = 1_000_000;
+    const devices = [
+      dev({ id: "a", last_seen: now - 10_000, last_rssi: -80 }),
+      dev({ id: "b", last_seen: now - 5_000, last_rssi: -45 }),
+      dev({ id: "c", last_seen: now - 500_000, last_rssi: -40 }), // too old
+      dev({ id: "d", last_seen: now - 1_000, last_rssi: null }),  // recent, no RSSI → last
+    ];
+    const near = presence(devices, now, 60_000);
+    expect(near.map((d) => d.id)).toEqual(["b", "a", "d"]);
   });
 });

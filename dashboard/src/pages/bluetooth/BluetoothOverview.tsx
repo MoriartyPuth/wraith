@@ -7,10 +7,12 @@ import { Async, Badge, Button, PageHeader, Panel, Rssi, Stat, Table, td } from "
 import { RssiHistogram } from "../../components/LazyCharts";
 import { ActiveBadge, BTDeviceLink, TransportBadge } from "../../components/bluetooth/BTBadges";
 import type { BTSensorStatus } from "../../types/api";
-import { CLASSIC_TX_WARNING, classicInquiryOn, coexistence, rssiHistogram, scanStateLabel } from "../../utils/bluetooth";
+import { breakdowns, CLASSIC_TX_WARNING, classicInquiryOn, coexistence, presence, rssiHistogram, scanStateLabel } from "../../utils/bluetooth";
+import { CategoryBars } from "../../components/bluetooth/CategoryBars";
 import { timeAgo } from "../../utils/format";
 
 const HIST_LIMIT = 500;
+const NEAR_WINDOW_MS = 5 * 60_000; // "near now" = heard within 5 min (BLE tracker expiry)
 
 /** Radio mode switch. Bluetooth mode pauses Wi-Fi monitoring on the sensor,
  * so it needs an explicit second click that says so. */
@@ -99,6 +101,8 @@ export default function BluetoothOverview() {
   const all = devices.data?.data ?? [];
   const hist = rssiHistogram(all);
   const recentMin = st ? Math.round(st.devices.recent_window_ms / 60000) : 10;
+  const near = presence(all, Date.now(), NEAR_WINDOW_MS);
+  const bd = breakdowns(all);
 
   return (
     <>
@@ -117,6 +121,35 @@ export default function BluetoothOverview() {
           {(d) => <div className="grid gap-3 md:grid-cols-2">{d.data.sensors.map((s) => <SensorCard key={s.sensor_id} s={s} />)}</div>}
         </Async>
       </Panel>
+
+      <Panel title={`Near now · heard in the last ${NEAR_WINDOW_MS / 60000} min`} className="mt-4"
+        action={<span className="text-xs text-ink-3">{near.length} device{near.length === 1 ? "" : "s"}</span>}>
+        <Async state={devices} isEmpty={() => near.length === 0}
+          empty="No device heard in the last few minutes. Bluetooth is only scanned while the radio is in Bluetooth mode.">
+          {() => (
+            <Table head={["Device", "Type", "Signal", "Last seen"]}>
+              {near.slice(0, 15).map((x) => (
+                <tr key={x.id}>
+                  <td className={td}><BTDeviceLink d={x} /></td>
+                  <td className={td}><TransportBadge t={x.transport} /></td>
+                  <td className={td}><Rssi dbm={x.last_rssi} /></td>
+                  <td className={`${td} whitespace-nowrap`}><span className="inline-flex items-center gap-2">{timeAgo(x.last_seen)}<ActiveBadge lastSeen={x.last_seen} /></span></td>
+                </tr>
+              ))}
+            </Table>
+          )}
+        </Async>
+        <p className="mt-2 text-xs text-ink-3">Strongest signal first. Signal depends on distance, obstacles and the device's transmit power — it is not a distance.</p>
+      </Panel>
+
+      {bd.length > 0 && (
+        <Panel title="Breakdowns" className="mt-4">
+          <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+            {bd.map((b) => <CategoryBars key={b.title} b={b} />)}
+          </div>
+          {all.length > HIST_LIMIT && <p className="mt-2 text-xs text-ink-3">Based on the {HIST_LIMIT} most recently seen of {devices.data?.pagination.total} addresses.</p>}
+        </Panel>
+      )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Panel title="Signal strength distribution">

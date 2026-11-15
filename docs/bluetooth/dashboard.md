@@ -33,6 +33,7 @@ MAC (`/clients?q=`), or the Bluetooth device page. Code: `dashboard/src/pages/bl
 | Route | Page |
 |-------|------|
 | `/bluetooth` | Overview: address totals (and seen in the last 10 min), Bluetooth error total, one card per sensor (radio mode, scan state, what the mode means for Wi-Fi, last error), signal-strength distribution, most recent addresses |
+| `/bluetooth` | …plus **Near now** (devices heard in the last 5 min, strongest signal first) and **Breakdowns** (transport, BLE address type, BLE manufacturer, Classic device class, BLE classification; top 6 + Other), both from the loaded device list |
 | `/bluetooth/classic` | Classic devices: name, address, class (decoded from the device's own Class of Device), last RSSI, observations, first/last seen; search |
 | `/bluetooth/ble` | BLE devices: name, address, address type, last RSSI, manufacturer, services, classification (marked inferred), advertisement count, first/last seen; search across name, address, manufacturer and service |
 | `/bluetooth/devices/:id` | Device details: every field with its source, RSSI over time, GATT results (BLE), the address's events |

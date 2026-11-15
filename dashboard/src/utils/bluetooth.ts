@@ -227,3 +227,74 @@ export function deviceSearchText(d: BTDevice): string {
   return [d.name, d.address, d.device_class, d.classification, companyLabel(d.manufacturer_id),
     ...d.services.flatMap((u) => [shortUUID(u), uuidName(u)])].filter(Boolean).join(" ").toLowerCase();
 }
+
+// ---- breakdowns (master/Bluetooth overview charts; pure, unit-tested) ----
+
+export interface Category { label: string; count: number; title?: string }
+export interface Breakdown { title: string; total: number; categories: Category[]; note?: string }
+
+function tally<T>(items: T[], key: (t: T) => string | null): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const it of items) {
+    const k = key(it);
+    if (k !== null) m.set(k, (m.get(k) ?? 0) + 1);
+  }
+  return m;
+}
+
+/** Sorted categories (largest first), capping the tail into "Other (n)". */
+function topCategories(m: Map<string, number>, max = 6): Category[] {
+  const sorted = [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  if (sorted.length <= max) return sorted.map(([label, count]) => ({ label, count }));
+  const head = sorted.slice(0, max - 1);
+  const rest = sorted.slice(max - 1);
+  const other = rest.reduce((n, [, c]) => n + c, 0);
+  return [...head.map(([label, count]) => ({ label, count })),
+    { label: "Other", count: other, title: rest.map(([l, c]) => `${l}: ${c}`).join(", ") }];
+}
+
+/** The breakdown charts for a set of devices: transport, BLE address type,
+ * Classic device class, BLE classification, top manufacturers. Each omits
+ * itself when it has nothing to show. */
+export function breakdowns(devices: BTDevice[]): Breakdown[] {
+  const ble = devices.filter((d) => d.transport === "ble");
+  const classic = devices.filter((d) => d.transport === "classic");
+  const out: Breakdown[] = [];
+  if (devices.length) {
+    out.push({ title: "Transport", total: devices.length,
+      categories: topCategories(tally(devices, (d) => (d.transport === "ble" ? "BLE" : "Classic"))) });
+  }
+  if (ble.length) {
+    out.push({ title: "BLE address type", total: ble.length,
+      categories: topCategories(tally(ble, (d) => (d.address_type === "public" ? "Public" : "Random"))),
+      note: "Random addresses rotate, so they count sightings, not devices." });
+  }
+  const mfr = tally(ble, (d) => (d.manufacturer_id === null ? null : (companyName(d.manufacturer_id) ?? "Unlisted")));
+  if (mfr.size) {
+    out.push({ title: "BLE manufacturer", total: [...mfr.values()].reduce((a, b) => a + b, 0),
+      categories: topCategories(mfr), note: "From advertising data; any device can advertise any company id." });
+  }
+  const cls = tally(classic, (d) => (d.device_class ? cap(d.device_class) : null));
+  if (cls.size) {
+    out.push({ title: "Classic device class", total: [...cls.values()].reduce((a, b) => a + b, 0),
+      categories: topCategories(cls), note: "Decoded from each device's own Class of Device." });
+  }
+  const inf = tally(ble, (d) => (d.classification ? cap(d.classification) : null));
+  if (inf.size) {
+    out.push({ title: "BLE classification", total: [...inf.values()].reduce((a, b) => a + b, 0),
+      categories: topCategories(inf), note: "Inferred by the sensor from advertising data, not an identification." });
+  }
+  return out;
+}
+
+function cap(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** Devices heard within windowMs of now, strongest signal first (devices
+ * without an RSSI sort last). For the "who's near now" view. */
+export function presence(devices: BTDevice[], now: number, windowMs: number): BTDevice[] {
+  return devices
+    .filter((d) => now - d.last_seen <= windowMs)
+    .sort((a, b) => (b.last_rssi ?? -999) - (a.last_rssi ?? -999) || b.last_seen - a.last_seen);
+}
