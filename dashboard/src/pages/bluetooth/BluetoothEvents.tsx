@@ -1,8 +1,9 @@
+import { PAGE_SIZE as PAGE, Pager } from "../../components/Pager";
 import { useState } from "react";
 import { api } from "../../services/api";
 import { useApi } from "../../hooks/useApi";
 import { useLiveRefresh } from "../../services/live";
-import { Async, Button, PageHeader, Panel, Select, Table, Toolbar, td } from "../../components/ui";
+import { Async, PageHeader, Panel, Select, Table, Toolbar, td } from "../../components/ui";
 import { describeEvent } from "../../utils/describe";
 import { timeAgo } from "../../utils/format";
 
@@ -15,7 +16,6 @@ const GROUPS: Record<string, string[]> = {
     "bluetooth.ble.gatt_service_discovered", "bluetooth.ble.gatt_characteristic_discovered"],
   system: ["bluetooth.system.status", "bluetooth.system.error"],
 };
-const PAGE = 100;
 
 export default function BluetoothEvents() {
   const [group, setGroup] = useState("all");
@@ -32,11 +32,6 @@ export default function BluetoothEvents() {
           { value: "all", label: "All Bluetooth events" }, { value: "classic", label: "Classic devices" },
           { value: "ble_adv", label: "BLE advertisements" }, { value: "ble_dev", label: "BLE devices" },
           { value: "gatt", label: "GATT / connections" }, { value: "system", label: "Status and errors" }]} />
-        <span className="ml-auto flex items-center gap-2 text-xs text-ink-3">
-          {total > 0 && `${offset + 1}–${Math.min(offset + PAGE, total)} of ${total}`}
-          <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>Newer</Button>
-          <Button disabled={offset + PAGE >= total} onClick={() => setOffset(offset + PAGE)}>Older</Button>
-        </span>
       </Toolbar>
       <Panel>
         <Async state={evs} isEmpty={(d) => d.data.length === 0} empty="No Bluetooth events stored for this filter.">
@@ -52,6 +47,8 @@ export default function BluetoothEvents() {
             </Table>
           )}
         </Async>
+        <Pager page={Math.floor(offset / PAGE)} total={total}
+          onPage={(p) => setOffset(p * PAGE)} prevLabel="‹ Newer" nextLabel="Older ›" />
       </Panel>
       <p className="mt-3 text-xs text-ink-3">
         BLE advertisement reports are stored and listed here but are not pushed to the live feed; they reach live views as

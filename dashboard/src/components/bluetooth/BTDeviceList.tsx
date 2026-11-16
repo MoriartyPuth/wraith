@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { api } from "../../services/api";
+import { Pager, usePaged } from "../Pager";
 import { useApi } from "../../hooks/useApi";
 import { useLiveRefresh } from "../../services/live";
 import { Async, Input, Panel, Rssi, Table, Toolbar, td } from "../ui";
@@ -18,6 +19,7 @@ export function BTDeviceList({ transport }: { transport: BTTransport }) {
   const rows = useMemo(() => (devices.data?.data ?? []).filter((d) => !needle || deviceSearchText(d).includes(needle)),
     [devices.data, needle]);
   const total = devices.data?.pagination.total ?? 0;
+  const paged = usePaged(rows, `${transport}|${needle}`);
 
   return (
     <>
@@ -35,7 +37,7 @@ export function BTDeviceList({ transport }: { transport: BTTransport }) {
             : "No Classic devices observed yet. Classic devices appear only when discoverable, and only while a sensor's radio is in Bluetooth mode."}>
           {() => transport === "classic" ? (
             <Table head={["Device", "Class (from CoD)", "Last RSSI", "Observations", "First seen", "Last seen"]}>
-              {rows.map((d) => (
+              {paged.rows.map((d) => (
                 <tr key={d.id}>
                   <td className={td}><BTDeviceLink d={d} /></td>
                   <td className={td}>{d.device_class ?? <span className="text-ink-3">not reported</span>}</td>
@@ -48,7 +50,7 @@ export function BTDeviceList({ transport }: { transport: BTTransport }) {
             </Table>
           ) : (
             <Table head={["Device", "Address type", "Last RSSI", "Manufacturer", "Services", "Classification", "Adverts", "First seen", "Last seen"]}>
-              {rows.map((d) => (
+              {paged.rows.map((d) => (
                 <tr key={d.id}>
                   <td className={td}><BTDeviceLink d={d} /></td>
                   <td className={td}>{d.address_type}</td>
@@ -70,6 +72,7 @@ export function BTDeviceList({ transport }: { transport: BTTransport }) {
             </Table>
           )}
         </Async>
+        <Pager {...paged.pager} />
       </Panel>
     </>
   );

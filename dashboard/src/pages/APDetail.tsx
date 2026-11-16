@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../services/api";
+import { PAGE_SIZE, Pager, usePaged } from "../components/Pager";
 import { useApi } from "../hooks/useApi";
 import { useLiveRefresh } from "../services/live";
 import { Async, Badge, Empty, Panel, PageHeader, Table, td } from "../components/ui";
@@ -20,13 +22,17 @@ export default function APDetail() {
   const bssid = decodeURIComponent(useParams().bssid ?? "").toUpperCase();
   const ap = useApi((s) => api.accessPoint(bssid, s), 15000, [bssid]);
   const obs = useApi((s) => api.observations(bssid, 500, s), 30000, [bssid]);
-  const evs = useApi((s) => api.events({ bssid }, 30, 0, s), 30000, [bssid]);
+  const [evOffset, setEvOffset] = useState(0);
+  const evs = useApi((s) => api.events({ bssid }, PAGE_SIZE, evOffset, s), 30000, [bssid, evOffset]);
   const fs = useApi((s) => api.detections(500, 0, s), 60000);
   const clients = useApi((s) => api.clients(bssid, 200, 0, s), 30000, [bssid]);
   useLiveRefresh(["access_point"], ap.reload, 3000);
   useLiveRefresh(["access_point"], obs.reload, 10000);
   useLiveRefresh(["client"], clients.reload, 5000);
   const related = (fs.data?.data ?? []).filter((f) => f.bssid === bssid);
+  const relatedPaged = usePaged(related, bssid);
+  const clientsPaged = usePaged(clients.data?.data ?? [], bssid);
+  useEffect(() => setEvOffset(0), [bssid]);
   const ssid = ap.data?.data.ssid;
 
   return (
@@ -68,7 +74,7 @@ export default function APDetail() {
         <Panel title="Findings for this AP" className="lg:col-span-3">
           {related.length === 0 ? <Empty>No findings reference this BSSID.</Empty> : (
             <ul className="space-y-2 text-sm">
-              {related.map((f) => (
+              {relatedPaged.rows.map((f) => (
                 <li key={f.id} className="flex items-start gap-2">
                   <SeverityBadge s={f.severity} /><Badge>{f.classification.replace("_", " ")}</Badge>
                   <span className="min-w-0 flex-1">{f.explanation}</span>
@@ -77,6 +83,7 @@ export default function APDetail() {
               ))}
             </ul>
           )}
+          <Pager {...relatedPaged.pager} />
         </Panel>
         <TxCard bssid={bssid} lastChannel={ap.data?.data.last_channel ?? null}
           clients={clients.data?.data ?? []} />
@@ -84,9 +91,9 @@ export default function APDetail() {
           action={<Link to={`/clients?bssid=${encodeURIComponent(bssid)}`} className="text-xs text-ink-3 hover:text-accent">All clients →</Link>}>
           <Async state={clients} isEmpty={(d) => d.data.length === 0}
             empty="No data frames from clients have been observed on this AP yet.">
-            {(d) => (
+            {() => (
               <Table head={["Device", "Address", "Ch", "Last RSSI", "Frames", "First seen", "Last seen"]}>
-                {d.data.map((c) => (
+                {clientsPaged.rows.map((c) => (
                   <tr key={c.client}>
                     <td className={td}><ClientDevice c={c} onChanged={clients.reload} /></td>
                     <td className={`${td} font-mono text-xs whitespace-nowrap`}>{c.client}</td>
@@ -105,11 +112,13 @@ export default function APDetail() {
               </Table>
             )}
           </Async>
+          <Pager {...clientsPaged.pager} />
         </Panel>
         <Panel title="Recent events" className="lg:col-span-3"
           action={<Link to={`/history?bssid=${encodeURIComponent(bssid)}`} className="text-xs text-ink-3 hover:text-accent">Full history →</Link>}>
           <Async state={evs} isEmpty={(d) => d.data.length === 0} empty="No events for this BSSID.">
             {(d) => (
+              <>
               <Table head={["Received", "Type", "Details"]}>
                 {d.data.map((e) => (
                   <tr key={e.id}>
@@ -119,6 +128,9 @@ export default function APDetail() {
                   </tr>
                 ))}
               </Table>
+              <Pager page={Math.floor(evOffset / PAGE_SIZE)} total={d.pagination.total}
+                onPage={(p) => setEvOffset(p * PAGE_SIZE)} prevLabel="‹ Newer" nextLabel="Older ›" />
+              </>
             )}
           </Async>
         </Panel>

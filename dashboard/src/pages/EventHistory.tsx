@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { PAGE_SIZE as PAGE, Pager } from "../components/Pager";
 import { useSearchParams } from "react-router-dom";
 import { api, fetchAllEvents } from "../services/api";
 import { useApi } from "../hooks/useApi";
@@ -12,7 +13,6 @@ import { isoTime } from "../utils/format";
 
 const TYPES = ["wifi.ap_observed", "wifi.beacon_observed", "wifi.pmf_observed", "wifi.deauth_observed",
   "wifi.disassoc_observed", "wifi.client_observed", "sensor.status", "sensor.heartbeat", "tx.ack", "tx.report"];
-const PAGE = 100;
 const EXPORT_MAX = 10000;
 
 // datetime-local value <-> epoch ms (local time)
@@ -111,13 +111,8 @@ export default function EventHistory() {
                   </tr>
                 ))}
               </Table>
-              <div className="mt-3 flex items-center gap-2 text-xs text-ink-3">
-                <span>{offset + 1}–{offset + d.data.length} of {total}</span>
-                <span className="ml-auto flex gap-2">
-                  <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>Newer</Button>
-                  <Button disabled={offset + PAGE >= total} onClick={() => setOffset(offset + PAGE)}>Older</Button>
-                </span>
-              </div>
+              <Pager page={Math.floor(offset / PAGE)} total={total}
+                onPage={(p) => setOffset(p * PAGE)} prevLabel="‹ Newer" nextLabel="Older ›" />
             </>
           )}
         </Async>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { Pager, usePaged } from "../components/Pager";
 import { api } from "../services/api";
 import { useApi } from "../hooks/useApi";
 import { useAPIndex } from "../hooks/useAPIndex";
@@ -86,6 +87,9 @@ export default function Detections() {
   const apIndex = useAPIndex();
   useLiveRefresh(["finding"], fs.reload, 500);
 
+  const shown = (fs.data?.data ?? []).filter((f) => (status === "all" || f.status === status) && (sev === "all" || f.severity === sev));
+  const paged = usePaged(shown, `${status}|${sev}`);
+
   const setFindingStatus = async (id: string, s: Finding["status"]) => {
     await api.setFindingStatus(id, s);
     fs.reload();
@@ -103,17 +107,17 @@ export default function Detections() {
       </Toolbar>
       <Async state={fs} isEmpty={(d) => d.data.length === 0}
         empty="No findings. Detectors report deauthentication bursts, security/PMF downgrades, SSID changes and conflicting identities — a quiet environment produces none.">
-        {(d) => {
-          const shown = d.data.filter((f) => (status === "all" || f.status === status) && (sev === "all" || f.severity === sev));
-          return shown.length === 0 ? <Panel><Empty>No findings match these filters.</Empty></Panel> : (
+        {() => shown.length === 0 ? <Panel><Empty>No findings match these filters.</Empty></Panel> : (
+          <>
             <div className="space-y-3">
-              {shown.map((f) => (
+              {paged.rows.map((f) => (
                 <FindingCard key={f.id} f={f} apSSID={f.bssid ? apIndex.get(f.bssid)?.ssid : undefined}
                   onStatus={(s) => setFindingStatus(f.id, s)} />
               ))}
             </div>
-          );
-        }}
+            <Pager {...paged.pager} />
+          </>
+        )}
       </Async>
     </>
   );

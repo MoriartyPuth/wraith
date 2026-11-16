@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { PAGE_SIZE, Pager } from "../../components/Pager";
 import { api } from "../../services/api";
 import { useApi } from "../../hooks/useApi";
 import { useLiveRefresh } from "../../services/live";
@@ -83,7 +84,9 @@ export default function BluetoothDeviceDetails() {
   const id = decodeURIComponent(useParams().id ?? "");
   const dev = useApi((s) => api.btDevice(id, s), 30000, [id]);
   const obs = useApi((s) => api.btObservations(id, 500, s), 30000, [id]);
-  const evs = useApi((s) => api.btDeviceEvents(id, 50, 0, s), 30000, [id]);
+  const [evOffset, setEvOffset] = useState(0);
+  useEffect(() => setEvOffset(0), [id]);
+  const evs = useApi((s) => api.btDeviceEvents(id, PAGE_SIZE, evOffset, s), 30000, [id, evOffset]);
   useLiveRefresh(["bt_device"], dev.reload, 3000);
   useLiveRefresh(["bt_device"], obs.reload, 3000);
   const points: Observation[] = useMemo(() => (obs.data?.data ?? [])
@@ -117,6 +120,7 @@ export default function BluetoothDeviceDetails() {
             <Panel title="Events for this address" className="mt-4">
               <Async state={evs} isEmpty={(e) => e.data.length === 0} empty="No stored events (older events are removed by retention).">
                 {(e) => (
+                  <>
                   <Table head={["Time", "Event", "Sensor"]}>
                     {e.data.map((x) => (
                       <tr key={x.id}>
@@ -126,6 +130,9 @@ export default function BluetoothDeviceDetails() {
                       </tr>
                     ))}
                   </Table>
+                  <Pager page={Math.floor(evOffset / PAGE_SIZE)} total={e.pagination.total}
+                    onPage={(p) => setEvOffset(p * PAGE_SIZE)} prevLabel="‹ Newer" nextLabel="Older ›" />
+                  </>
                 )}
               </Async>
             </Panel>

@@ -13,6 +13,7 @@ Labels: `NOT IMPLEMENTED` · `IMPLEMENTED — NOT HARDWARE VALIDATED` ·
 | BT-9 GATT discovery (optional, active) | not implemented; needs a BLE device you own |
 | Wi-Fi clients: counts, devices-on-networks, maker, device guess, operator names | done (2026-11-16/17) |
 | Dashboard: master overview, coverage timeline, global search | done (2026-11-16) |
+| Dashboard: 15-row pagination on every list (shared `Pager`; event lists page server-side) | done (2026-11-17) |
 | macOS support for Core | not started (Linux-only serial + system code; see README) |
 
 ## Phase 0 — Discovery ✅ (2026-11-11)

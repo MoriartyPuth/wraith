@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { Pager, usePaged } from "../components/Pager";
 import { api } from "../services/api";
 import { useApi } from "../hooks/useApi";
 import { useLiveRefresh } from "../services/live";
@@ -12,6 +13,8 @@ export default function AccessPoints() {
   const aps = useApi((s) => api.accessPoints(500, 0, s), 30000);
   useLiveRefresh(["access_point"], aps.reload, 5000);
   const needle = q.trim().toLowerCase();
+  const matching = (aps.data?.data ?? []).filter((a) => !needle || a.ssid.toLowerCase().includes(needle) || a.bssid.toLowerCase().includes(needle));
+  const paged = usePaged(matching, needle);
   return (
     <>
       <PageHeader title="Access Points" subtitle="Inventory of every AP observed, including ones no longer heard. Security and PMF are what the AP advertises." />
@@ -21,9 +24,9 @@ export default function AccessPoints() {
       </Toolbar>
       <Panel>
         <Async state={aps} isEmpty={(d) => d.data.length === 0} empty="No access points observed yet.">
-          {(d) => (
+          {() => matching.length === 0 ? <p className="py-6 text-center text-sm text-ink-3">No access point matches the search.</p> : (
             <Table head={["SSID", "BSSID", "Ch", "Last RSSI", "Security", "PMF", "Clients", "First seen", "Last seen"]}>
-              {d.data.filter((a) => !needle || a.ssid.toLowerCase().includes(needle) || a.bssid.toLowerCase().includes(needle)).map((a) => (
+              {paged.rows.map((a) => (
                 <tr key={a.bssid}>
                   <td className={td}>{a.ssid || <span className="text-ink-3">(hidden)</span>}</td>
                   <td className={td}><BssidLink bssid={a.bssid} /></td>
@@ -46,6 +49,7 @@ export default function AccessPoints() {
             </Table>
           )}
         </Async>
+        <Pager {...paged.pager} />
       </Panel>
     </>
   );

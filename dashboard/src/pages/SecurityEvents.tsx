@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { PAGE_SIZE, Pager } from "../components/Pager";
 import { Link } from "react-router-dom";
 import { api } from "../services/api";
 import { useApi } from "../hooks/useApi";
@@ -12,7 +13,8 @@ import { timeAgo } from "../utils/format";
 const TYPES = ["wifi.deauth_observed", "wifi.disassoc_observed", "wifi.pmf_observed"];
 
 export default function SecurityEvents() {
-  const ev = useApi((s) => api.events({ types: TYPES }, 200, 0, s), 30000);
+  const [offset, setOffset] = useState(0);
+  const ev = useApi((s) => api.events({ types: TYPES }, PAGE_SIZE, offset, s), 30000, [offset]);
   const fs = useApi((s) => api.detections(500, 0, s), 30000);
   const apIndex = useAPIndex();
   useLiveRefresh(["event"], ev.reload, 2000);
@@ -33,6 +35,7 @@ export default function SecurityEvents() {
         <Async state={ev} isEmpty={(d) => d.data.length === 0}
           empty="No deauthentication, disassociation or PMF events yet. A device leaving a network normally produces one.">
           {(d) => (
+            <>
             <Table head={["Received", "Type", "Access point", "Sensor", "Details", "Finding"]}>
               {d.data.map((e) => {
                 const f = citedBy.get(e.event_id);
@@ -52,6 +55,9 @@ export default function SecurityEvents() {
                 );
               })}
             </Table>
+            <Pager page={Math.floor(offset / PAGE_SIZE)} total={d.pagination.total}
+              onPage={(p) => setOffset(p * PAGE_SIZE)} prevLabel="‹ Newer" nextLabel="Older ›" />
+            </>
           )}
         </Async>
       </Panel>

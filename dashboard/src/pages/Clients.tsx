@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { Pager, usePaged } from "../components/Pager";
 import { api } from "../services/api";
 import { useApi } from "../hooks/useApi";
 import { useLiveRefresh } from "../services/live";
@@ -23,6 +24,7 @@ export default function Clients() {
     () => (clients.data?.data ?? []).filter((c) => clientMatches(c, needle)),
     [clients.data, needle],
   );
+  const paged = usePaged(rows, `${needle}|${bssid}`);
 
   return (
     <>
@@ -46,7 +48,7 @@ export default function Clients() {
           empty={bssid ? "No client data frames observed for this AP yet." : "No client data frames observed yet."}>
           {() => (
             <Table head={["Device", "Address", "Access point", "Ch", "Last RSSI", "Frames", "First seen", "Last seen"]}>
-              {rows.map((c) => (
+              {paged.rows.map((c) => (
                 <tr key={`${c.bssid}/${c.client}`}>
                   <td className={td}><ClientDevice c={c} onChanged={clients.reload} /></td>
                   <td className={`${td} font-mono text-xs whitespace-nowrap`}>{c.client}</td>
@@ -71,6 +73,7 @@ export default function Clients() {
             </Table>
           )}
         </Async>
+        <Pager {...paged.pager} />
       </Panel>
       <p className="mt-3 text-xs text-ink-3">
         WRAITH Nano sees client addresses in 802.11 data-frame headers on the channel it is tuned to (one channel at a

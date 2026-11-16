@@ -1,5 +1,6 @@
 import { api } from "../services/api";
 import { useApi } from "../hooks/useApi";
+import { Pager, usePaged } from "../components/Pager";
 import { useLiveRefresh } from "../services/live";
 import { Async, Panel, PageHeader, Stat, Table, td } from "../components/ui";
 import { AuthBadge, BssidLink, PmfBadge } from "../components/badges";
@@ -17,6 +18,7 @@ export default function PMFInspector() {
   useLiveRefresh(["access_point"], aps.reload, 5000);
   const list = aps.data?.data ?? [];
   const count = (p: PMF) => list.filter((a) => a.pmf === p).length;
+  const paged = usePaged([...list].sort((a, b) => a.pmf.localeCompare(b.pmf)));
 
   return (
     <>
@@ -36,9 +38,9 @@ export default function PMFInspector() {
         </Panel>
         <Panel title="Access points" className="lg:col-span-2">
           <Async state={aps} isEmpty={(d) => d.data.length === 0} empty="No access points observed yet.">
-            {(d) => (
+            {() => (
               <Table head={["Access point", "Security", "PMF", "MFPC", "MFPR", "AKM"]}>
-                {[...d.data].sort((a, b) => a.pmf.localeCompare(b.pmf)).map((a) => {
+                {paged.rows.map((a) => {
                   const rsn = a.rsn as RSNInfo | null;
                   return (
                     <tr key={a.bssid}>
@@ -54,6 +56,7 @@ export default function PMFInspector() {
               </Table>
             )}
           </Async>
+          <Pager {...paged.pager} />
         </Panel>
       </div>
     </>

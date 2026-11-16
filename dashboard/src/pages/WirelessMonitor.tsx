@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { api } from "../services/api";
+import { Pager, usePaged } from "../components/Pager";
 import { useApi } from "../hooks/useApi";
 import { useLive } from "../services/live";
 import { Async, Input, Panel, PageHeader, Rssi, Select, Table, Toolbar, td } from "../components/ui";
@@ -41,6 +42,8 @@ export default function WirelessMonitor() {
       : sort === "channel" ? (a.ap.last_channel ?? 0) - (b.ap.last_channel ?? 0)
       : a.ap.ssid.localeCompare(b.ap.ssid));
 
+  const paged = usePaged(shown, [needle, ch, sec, fresh, sort].join("|"));
+
   const channels = [...new Set(rows.map((r) => r.ap.last_channel).filter((c): c is number => c !== null))].sort((a, b) => a - b);
   const auths = [...new Set(rows.map((r) => r.ap.auth_mode).filter((a): a is string => !!a))].sort();
 
@@ -64,7 +67,7 @@ export default function WirelessMonitor() {
         <Async state={base} isEmpty={() => rows.length === 0} empty="No access points observed yet.">
           {() => shown.length === 0 ? <p className="py-6 text-center text-sm text-ink-3">No APs match these filters.</p> : (
             <Table head={["SSID", "BSSID", "Ch", "RSSI (dBm)", "Security", "PMF", "Sensor", "Last heard"]}>
-              {shown.map(({ ap, updated }) => (
+              {paged.rows.map(({ ap, updated }) => (
                 <tr key={ap.bssid} className={now - updated < 2500 ? "bg-accent/10 transition-colors" : "transition-colors duration-1000"}>
                   <td className={td}>{ap.ssid || <span className="text-ink-3">(hidden)</span>}</td>
                   <td className={td}><BssidLink bssid={ap.bssid} /></td>
@@ -79,6 +82,7 @@ export default function WirelessMonitor() {
             </Table>
           )}
         </Async>
+        <Pager {...paged.pager} />
       </Panel>
     </>
   );
