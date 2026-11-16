@@ -59,6 +59,7 @@ Object.assign(clients[2]!, { private: false, vendor: "Foxconn", vendor_full: "CL
 export function setLabel(address: string, label: string) {
   const a = address.toUpperCase();
   for (const c of clients) if (c.client === a) c.label = label.trim();
+  for (const d of btDevices) if (d.address === a) d.label = label.trim();
   return { address: a, label: label.trim(), updated_at: Date.now() };
 }
 
@@ -166,6 +167,18 @@ const BT_SPECS: BTSpec[] = [
     classification: null, confidence: null, manufacturer_id: null, tx_power: null, last_rssi: -93, observations: 9, ago: 120 },
   { transport: "ble", address: "02:DE:B7:00:01:04", address_type: "public", name: "Demo-Sensor", cod: null, device_class: null,
     classification: "sensor", confidence: 0.8, manufacturer_id: 0x0499, tx_power: -4, services: ["181a"], last_rssi: -49, observations: 96, ago: 1 },
+  // Decoded identities (Core internal/btident), labelled "Demo" like everything here.
+  { transport: "ble", address: "02:DE:B7:00:01:05", address_type: "random", name: null, cod: null, device_class: null,
+    classification: null, confidence: null, manufacturer_id: 0x004c, tx_power: null, last_rssi: -45, observations: 64, ago: 3,
+    label: "Demo earbuds",
+    identity: { kind: "headphones", label: "AirPods Pro (2nd gen)", source: "Apple Continuity: Proximity Pairing", rank: 90,
+      battery: { left: 70, right: 90, case: 80, left_charging: true, case_charging: true } } },
+  { transport: "ble", address: "02:DE:B7:00:01:06", address_type: "random", name: null, cod: null, device_class: null,
+    classification: null, confidence: null, manufacturer_id: 0x004c, tx_power: null, last_rssi: -61, observations: 140, ago: 4,
+    identity: { kind: "phone_tablet_computer", label: "iPhone, iPad or Mac", source: "Apple Continuity: Handoff", rank: 50 } },
+  { transport: "ble", address: "02:DE:B7:00:01:07", address_type: "public", name: null, cod: null, device_class: null,
+    classification: null, confidence: null, manufacturer_id: null, tx_power: null, services: ["feed"], last_rssi: -77, observations: 33, ago: 30,
+    identity: { kind: "tracker", label: "Tile tracker", source: "service UUID 0xfeed (Tile)", rank: 85, tracker: "tile" } },
 ];
 const btId = (s: Pick<BTDevice, "transport" | "address_type" | "address">) =>
   s.transport === "classic" ? `classic:${s.address}` : `ble:${s.address_type}:${s.address}`;
@@ -187,10 +200,10 @@ export function btObservations(id: string): BTObservation[] {
 }
 
 export const btStatus: BTStatus = {
-  sensors: [{ sensor_id: SENSOR, mode: "wifi", state: "idle", classic_devices: 4, ble_devices: 4,
+  sensors: [{ sensor_id: SENSOR, mode: "wifi", state: "idle", classic_devices: btDevices.filter((d) => d.transport === "classic").length, ble_devices: btDevices.filter((d) => d.transport === "ble").length,
     message: "Demo: switched back to Wi-Fi mode", updated_at: BT_END, error_count: 1,
     last_error_code: "inquiry_failed", last_error_message: "Demo: inquiry timed out once", last_error_at: BT_END - 15 * 60_000 }],
-  devices: { classic: 4, ble: 4, total: 8, recent_classic: 0, recent_ble: 0, recent_window_ms: 600_000 },
+  devices: { classic: btDevices.filter((d) => d.transport === "classic").length, ble: btDevices.filter((d) => d.transport === "ble").length, total: btDevices.length, recent_classic: 0, recent_ble: 0, recent_window_ms: 600_000 },
 };
 
 export const btGATT: Record<string, { services: GATTItem[]; characteristics: GATTItem[] }> = {

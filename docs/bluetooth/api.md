@@ -11,6 +11,10 @@ loopback host guard (DNS-rebinding protection), 15 s request timeout,
 pagination (`limit` 1–500, `offset`) and error format
 (`{"error":{"code","message"}}`) as every other endpoint. No separate server.
 
+Device rows also carry `identity` (decoded by Core from the advertisements)
+and `label` (your name), and `/bluetooth/devices` accepts `kind=` to filter
+by identity kind. See [identity.md](identity.md).
+
 ## Device identifiers
 
 A device row is one observed address (an address is not a physical device;

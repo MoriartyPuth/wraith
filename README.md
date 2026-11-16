@@ -11,8 +11,10 @@ No cloud, no host monitor mode, passive by default.
 - **Access points**: security, PMF, channel, signal history.
 - **Connected devices**: who's on which network, the maker, a device-type
   guess, and your own names for them ([why not "iPhone"?](docs/clients.md)).
-- **Bluetooth**: BLE and Classic devices, trackers, pop-up spam. The ESP32's
-  one radio switches to Bluetooth manually or on a schedule.
+- **Bluetooth**: knows AirPods (with battery), Apple devices, AirPlay
+  speakers and trackers (AirTag, Tile, SmartTag…) from what they broadcast,
+  and flags trackers away from their owner or lingering nearby ([how](docs/bluetooth/identity.md)).
+  The ESP32's one radio switches to Bluetooth manually or on a schedule.
 - **Detections**: deauth floods, security/PMF downgrades, rogue APs,
   identity changes. Each finding comes with evidence, confidence and
   limitations.

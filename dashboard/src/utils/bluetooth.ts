@@ -1,7 +1,7 @@
 // Pure helpers for the Bluetooth pages (unit-tested in bluetooth.test.ts).
 // Nothing here guesses: lookups return undefined for unknown ids, and every
 // device field is labelled with where its value came from.
-import type { BTDevice, BTSensorStatus } from "../types/api";
+import type { BTDevice, BTSensorStatus, BTBattery, BTKind } from "../types/api";
 
 /** A device seen within this window is shown as "active". */
 export const BT_ACTIVE_MS = 120_000;
@@ -143,12 +143,17 @@ const unavailable = (label: string, note: string): FieldRow => ({ label, value: 
 /** The device detail view, one row per field, each labelled with its provenance. */
 export function deviceFields(d: BTDevice): FieldRow[] {
   const rows: FieldRow[] = [];
+  if (d.label) rows.push({ label: "Your name", value: d.label, kind: "observed", note: "Set by you; kept by address." });
   rows.push(d.name
     ? { label: "Name", value: d.name, kind: "observed" }
     : unavailable("Name", d.transport === "classic"
       ? "The device did not return its name to inquiry."
       : "Not present in the advertisements received."));
   rows.push({ label: "Address", value: d.address, kind: "observed" });
+  if (d.address_vendor) {
+    rows.push({ label: "Maker (from address)", value: d.address_vendor, kind: "derived",
+      note: "IEEE registry owner of this vendor-assigned address prefix." });
+  }
   if (d.transport === "ble") {
     rows.push({ label: "Address type", value: d.address_type || "—", kind: "observed",
       note: d.address_type === "random" ? "Random addresses may rotate; this row may not be the same physical device over time." : undefined });
@@ -173,6 +178,20 @@ export function deviceFields(d: BTDevice): FieldRow[] {
     rows.push(d.services.length
       ? { label: "Services", value: d.services.map((u) => uuidName(u) ? `${uuidName(u)} (${shortUUID(u)})` : shortUUID(u)).join(", "), kind: "observed" }
       : unavailable("Services", "No service UUIDs advertised."));
+    rows.push(d.identity
+      ? { label: "Identified as", value: d.identity.label, kind: "derived",
+        note: `Decoded from ${d.identity.source}${d.identity.rank < 50 ? "; a broad category, not a model" : ""}.` }
+      : unavailable("Identified as", "Nothing WRAITH recognises in the advertisements received."));
+    if (d.identity?.battery) {
+      rows.push({ label: "Battery", value: batteryText(d.identity.battery), kind: "observed",
+        note: `Reported by the device in 10 % steps${d.identity.at ? `, ${new Date(d.identity.at).toLocaleString()}` : ""}.` });
+    }
+    if (d.identity?.kind === "tracker") {
+      rows.push({ label: "Tracker state", value: d.identity.separated ? "away from its owner" : "no separated signal",
+        kind: "observed", note: d.identity.separated
+          ? "The tracker says it is separated from its owner's phone. If nobody here owns it, see the Detection Center."
+          : "This brand does not broadcast whether its owner is nearby." });
+    }
     rows.push(d.classification
       ? { label: "Classification", value: d.classification + (d.confidence !== null ? ` (confidence ${Math.round(d.confidence * 100)}%)` : ""),
         kind: "inferred", note: "The sensor's guess from advertising data, not an identification." }
@@ -221,12 +240,39 @@ export function scanStateLabel(state: BTSensorStatus["state"]): string {
   }
 }
 
-/** Lowercased search text for one device: name, address, class and (BLE)
- * manufacturer and services, by id and by name. */
+/** Lowercased search text for one device: your name, its name, address,
+ * class, decoded identity and (BLE) manufacturer and services. */
 export function deviceSearchText(d: BTDevice): string {
-  return [d.name, d.address, d.device_class, d.classification, companyLabel(d.manufacturer_id),
+  return [d.label, d.name, d.address, d.address_vendor, d.device_class, d.classification, d.identity?.label, d.identity?.source,
+    d.identity ? KIND_LABELS[d.identity.kind] : null, companyLabel(d.manufacturer_id),
     ...d.services.flatMap((u) => [shortUUID(u), uuidName(u)])].filter(Boolean).join(" ").toLowerCase();
 }
+
+// ---- decoded identity (Core: internal/btident) ----
+
+export const KIND_LABELS: Record<BTKind, string> = {
+  phone_tablet_computer: "Phone, tablet or computer", headphones: "Headphones & earbuds", watch: "Watch",
+  tv_speaker: "TV & speaker", tracker: "Item tracker", find_my: "Find My (near owner)", beacon: "Beacon",
+  smart_home: "Smart home", other: "Other",
+};
+
+/** What to call a device: your name, else its advertised name, else what it
+ * was identified as, else null. */
+export function btDisplayName(d: Pick<BTDevice, "label" | "name" | "identity">): string | null {
+  return d.label || d.name || d.identity?.label || null;
+}
+
+/** "L 70% · R 90% · case 80%" with "⚡" on charging parts; "" if nothing reported. */
+export function batteryText(b: BTBattery | undefined): string {
+  if (!b) return "";
+  const part = (k: string, v: number | undefined, chg: boolean | undefined) =>
+    v === undefined ? null : `${k} ${v}%${chg ? " ⚡" : ""}`;
+  return [part("L", b.left, b.left_charging), part("R", b.right, b.right_charging), part("case", b.case, b.case_charging)]
+    .filter(Boolean).join(" · ");
+}
+
+/** True for an item tracker (any brand); the near-owner Find My advert is not one. */
+export const isTracker = (d: Pick<BTDevice, "identity">) => d.identity?.kind === "tracker";
 
 // ---- breakdowns (master/Bluetooth overview charts; pure, unit-tested) ----
 
@@ -278,6 +324,11 @@ export function breakdowns(devices: BTDevice[]): Breakdown[] {
   if (cls.size) {
     out.push({ title: "Classic device class", total: [...cls.values()].reduce((a, b) => a + b, 0),
       categories: topCategories(cls), note: "Decoded from each device's own Class of Device." });
+  }
+  const kinds = tally(ble, (d) => (d.identity ? KIND_LABELS[d.identity.kind] : null));
+  if (kinds.size) {
+    out.push({ title: "BLE device type", total: [...kinds.values()].reduce((a, b) => a + b, 0),
+      categories: topCategories(kinds, 8), note: "Decoded by Core from what each address advertises (e.g. Apple Continuity messages); one device may use several addresses." });
   }
   const inf = tally(ble, (d) => (d.classification ? cap(d.classification) : null));
   if (inf.size) {

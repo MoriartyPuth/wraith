@@ -1,6 +1,7 @@
 package bluetooth
 
 import (
+	"github.com/MoriartyPuth/wraith/core/internal/btident"
 	"sort"
 	"strings"
 
@@ -27,6 +28,12 @@ type Sighting struct {
 	TxPower        *int
 	Services       []string
 	RSSI           *int
+
+	// Identity is what Core decoded from this event's advertising data
+	// (internal/btident), nil if nothing was recognised. Decoded marks a BLE
+	// event that was examined, so a row records "checked" even when nil.
+	Identity *btident.Identity
+	Decoded  bool
 
 	// Count is how many observations this event represents and is added to
 	// the device's total (docs/bluetooth/event-protocol.md, "Counting").
@@ -71,6 +78,12 @@ func Merge(prev *storage.BTDevice, s Sighting) storage.BTDevice {
 		d.TxPower = s.TxPower
 	}
 	d.Services = mergeServices(d.Services, s.Services)
+	if s.Decoded {
+		d.IdentChecked = true
+	}
+	if btident.Better(s.Identity, d.Identity) {
+		d.Identity = s.Identity
+	}
 	if s.RSSI != nil {
 		r := *s.RSSI
 		d.LastRSSI = &r

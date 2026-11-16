@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BTDevice, StoredEvent } from "../types/api";
 import {
-  breakdowns, btDeviceHref, btDeviceLabel, classicInquiryOn, isBluetoothFinding, presence, splitFindings, coexistence, companyLabel, deviceFields, deviceSearchText, rssiHistogram, scanStateLabel, shortUUID, uuidName,
+  batteryText, breakdowns, btDeviceHref, btDisplayName, isTracker, btDeviceLabel, classicInquiryOn, isBluetoothFinding, presence, splitFindings, coexistence, companyLabel, deviceFields, deviceSearchText, rssiHistogram, scanStateLabel, shortUUID, uuidName,
 } from "./bluetooth";
 import { describeEvent } from "./describe";
 import * as demo from "../services/demo";
@@ -211,5 +211,44 @@ describe("bluetooth breakdowns and presence", () => {
     ];
     const near = presence(devices, now, 60_000);
     expect(near.map((d) => d.id)).toEqual(["b", "a", "d"]);
+  });
+});
+
+describe("decoded identity helpers", () => {
+  const base = { id: "ble:random:02:DE:B7:00:09:01", transport: "ble", address: "02:DE:B7:00:09:01", address_type: "random",
+    name: null, cod: null, device_class: null, classification: null, confidence: null, manufacturer_id: 0x004c,
+    tx_power: null, services: [], last_rssi: -50, rssi_avg: null, observations: 1, first_seen: 0, last_seen: 0,
+    last_sensor: null } as BTDevice;
+  const pods = { ...base, identity: { kind: "headphones", label: "AirPods Pro (2nd gen)", source: "Apple Continuity: Proximity Pairing",
+    rank: 90, battery: { left: 70, right: 90, case: 80, left_charging: true } } } as BTDevice;
+  const tile = { ...base, address: "02:DE:B7:00:09:02", identity: { kind: "tracker", label: "Tile tracker", source: "service UUID 0xfeed (Tile)", rank: 85, tracker: "tile" } } as BTDevice;
+
+  it("names a device by label, then advertised name, then identity", () => {
+    expect(btDisplayName({ ...pods, label: "my pods", name: "Pods" })).toBe("my pods");
+    expect(btDisplayName({ ...pods, name: "Pods" })).toBe("Pods");
+    expect(btDisplayName(pods)).toBe("AirPods Pro (2nd gen)");
+    expect(btDisplayName(base)).toBeNull();
+  });
+  it("formats battery with charging marks, skipping unreported parts", () => {
+    expect(batteryText(pods.identity!.battery)).toBe("L 70% ⚡ · R 90% · case 80%");
+    expect(batteryText({ case: 40, case_charging: true })).toBe("case 40% ⚡");
+    expect(batteryText(undefined)).toBe("");
+  });
+  it("searches label and identity, flags trackers, breaks down by type", () => {
+    expect(deviceSearchText({ ...pods, label: "Kitchen" })).toContain("kitchen");
+    expect(deviceSearchText(pods)).toContain("airpods pro");
+    expect(deviceSearchText(tile)).toContain("item tracker");
+    expect(isTracker(tile)).toBe(true);
+    expect(isTracker(pods)).toBe(false);
+    const b = breakdowns([pods, tile, base]).find((x) => x.title === "BLE device type");
+    expect(b?.total).toBe(2);
+    expect(b?.categories.map((c) => c.label).sort()).toEqual(["Headphones & earbuds", "Item tracker"]);
+  });
+  it("shows identity, battery and tracker state as detail rows", () => {
+    const rows = deviceFields(pods);
+    expect(rows.find((r) => r.label === "Identified as")?.kind).toBe("derived");
+    expect(rows.find((r) => r.label === "Battery")?.value).toBe("L 70% ⚡ · R 90% · case 80%");
+    expect(deviceFields(tile).find((r) => r.label === "Tracker state")?.value).toBe("no separated signal");
+    expect(deviceFields(base).find((r) => r.label === "Identified as")?.kind).toBe("unavailable");
   });
 });

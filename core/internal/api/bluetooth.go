@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/MoriartyPuth/wraith/core/internal/btident"
 	"net/http"
 	"strconv"
 	"strings"
@@ -90,6 +91,14 @@ func (h *handlers) btDevices(forced string) http.HandlerFunc {
 				return
 			}
 			f.Since = n
+		}
+		if v := q.Get("kind"); v != "" {
+			if !btident.ValidKind(v) {
+				writeErr(w, http.StatusBadRequest, "invalid_parameter",
+					"kind must be one of "+strings.Join(btident.Kinds, ", "))
+				return
+			}
+			f.Kind = v
 		}
 		paged(w, r, func(ctx context.Context, p storage.Page) ([]storage.BTDevice, int, error) {
 			return h.d.Store.ListBTDevices(ctx, p, f)

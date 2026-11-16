@@ -6,7 +6,8 @@ Core inventory ([event-protocol.md](event-protocol.md)), REST/WebSocket API
 (BT-5), passive BLE scanning (BT-6), bounded Classic inquiry (BT-7),
 detectors (BT-10), LCD screens (BT-11), full regression (BT-12) and scheduled
 sessions ([schedule.md](schedule.md)); see [testing.md](testing.md). Not
-implemented: optional operator-initiated GATT discovery (BT-9).
+implemented: optional operator-initiated GATT discovery (BT-9). Device
+identification and tracker detection: [identity.md](identity.md).
 
 ## Decision: one board, switch mode (2026-11-13)
 

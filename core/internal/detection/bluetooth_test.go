@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MoriartyPuth/wraith/core/internal/btident"
 	"github.com/MoriartyPuth/wraith/core/internal/events"
 	"github.com/MoriartyPuth/wraith/core/internal/storage"
 )
@@ -248,5 +249,76 @@ func TestBluetoothDetectorsIgnoreWifi(t *testing.T) {
 				t.Fatalf("Wi-Fi event produced %+v", x)
 			}
 		}
+	}
+}
+
+// TestTrackerSeparatedDULT: the cross-platform unwanted-tracking advert
+// (service data 0xFCB2) counts as separated for any brand.
+func TestTrackerSeparatedDULT(t *testing.T) {
+	e := NewEngine()
+	t0 := time.Now()
+	const a = "C4:00:00:00:00:01"
+	var got []storage.Finding
+	for _, at := range []time.Duration{0, 15 * time.Minute, 31 * time.Minute} {
+		ev := btEv(events.TypeBtBleAdvObserved, map[string]any{"address": a, "address_type": "random", "rssi": -70,
+			"services": []string{"fcb2"}, "count": 1})
+		got = append(got, only(e.Observe(&Context{Event: ev, Now: t0.Add(at)}), "bt_tracker_separated")...)
+	}
+	if len(got) != 1 || !strings.Contains(got[0].Explanation, "0xfcb2") {
+		t.Fatalf("DULT separated: %+v", got)
+	}
+	// A recognised tracker without a separated state (Tile) is not "separated".
+	for _, at := range []time.Duration{0, 15 * time.Minute, 31 * time.Minute, 60 * time.Minute} {
+		ev := btEv(events.TypeBtBleAdvObserved, map[string]any{"address": "C4:00:00:00:00:02", "address_type": "random",
+			"rssi": -70, "services": []string{"feed"}, "count": 1})
+		if f := only(e.Observe(&Context{Event: ev, Now: t0.Add(at)}), "bt_tracker_separated"); len(f) != 0 {
+			t.Fatalf("Tile reported as separated: %+v", f)
+		}
+	}
+}
+
+func TestTrackerLingering(t *testing.T) {
+	t0 := time.Now()
+	tile := &btident.Identity{Kind: btident.KindTracker, Label: "Tile tracker", Source: "service UUID 0xfeed (Tile)",
+		Rank: 85, Tracker: btident.TrackerTile}
+	dev := func(addr string, span time.Duration, id *btident.Identity, label string) *storage.BTDevice {
+		return &storage.BTDevice{ID: "ble:public:" + addr, Transport: storage.BTBLE, Address: addr, AddressType: "public",
+			FirstSeen: t0.Add(-span).UnixMilli(), LastSeen: t0.UnixMilli(), Observations: 42, Identity: id, Label: label}
+	}
+	run := func(e *Engine, lk Lookup, d *storage.BTDevice) []storage.Finding {
+		ev := btEv(events.TypeBtBleAdvObserved, map[string]any{"address": d.Address, "address_type": "public", "rssi": -70})
+		return only(e.Observe(&Context{Event: ev, CurBT: d, Lookup: lk, Now: t0}), "bt_tracker_lingering")
+	}
+	lk := &fakeLookup{reported: map[string]bool{}}
+	e := NewEngine()
+
+	if f := run(e, lk, dev("00:11:22:00:00:01", 23*time.Hour, tile, "")); len(f) != 0 {
+		t.Fatal("reported before 24 h")
+	}
+	f := run(e, lk, dev("00:11:22:00:00:01", 25*time.Hour, tile, ""))
+	if len(f) != 1 || *f[0].BTDevice != "ble:public:00:11:22:00:00:01" || f[0].Severity != "low" ||
+		!strings.Contains(f[0].Explanation, "Tile tracker") || !strings.Contains(f[0].Explanation, "25h") {
+		t.Fatalf("lingering: %+v", f)
+	}
+	if f := run(e, lk, dev("00:11:22:00:00:01", 26*time.Hour, tile, "")); len(f) != 0 {
+		t.Fatal("reported twice")
+	}
+	for name, d := range map[string]*storage.BTDevice{
+		"named by operator": dev("00:11:22:00:00:02", 48*time.Hour, tile, "my keys"),
+		"separated (other detector)": dev("00:11:22:00:00:03", 48*time.Hour,
+			&btident.Identity{Kind: btident.KindTracker, Separated: true, Tracker: btident.TrackerDULT}, ""),
+		"near-owner Find My": dev("00:11:22:00:00:04", 48*time.Hour,
+			&btident.Identity{Kind: btident.KindFindMy, Tracker: btident.TrackerApple}, ""),
+		"not a tracker": dev("00:11:22:00:00:05", 48*time.Hour, &btident.Identity{Kind: btident.KindPhone}, ""),
+		"no identity":   dev("00:11:22:00:00:06", 48*time.Hour, nil, ""),
+	} {
+		if f := run(e, lk, d); len(f) != 0 {
+			t.Errorf("%s: reported %+v", name, f)
+		}
+	}
+	// Already reported before a Core restart (stored finding): not again.
+	lk.reported["bt_tracker_lingering/ble:public:00:11:22:00:00:07"] = true
+	if f := run(NewEngine(), lk, dev("00:11:22:00:00:07", 48*time.Hour, tile, "")); len(f) != 0 {
+		t.Fatal("re-reported after restart")
 	}
 }

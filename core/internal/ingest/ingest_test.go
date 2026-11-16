@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/MoriartyPuth/wraith/core/internal/bluetooth"
+	"github.com/MoriartyPuth/wraith/core/internal/btident"
 	"github.com/MoriartyPuth/wraith/core/internal/capture"
 	"github.com/MoriartyPuth/wraith/core/internal/detection"
 	"github.com/MoriartyPuth/wraith/core/internal/events"
@@ -548,5 +549,87 @@ func TestBluetoothFindingStoredAndDeduped(t *testing.T) {
 	}
 	if _, aps, _ := st.ListAccessPoints(ctx, storage.Page{Limit: 10}); aps != 0 {
 		t.Fatalf("bluetooth findings created %d AP rows", aps)
+	}
+}
+
+// TestBluetoothIdentity: identities decoded on arrival, more specific
+// messages win, equal ranks refresh (battery), the operator label is joined,
+// and the backfill decodes rows stored before decoding existed.
+func TestBluetoothIdentity(t *testing.T) {
+	p, st, _ := setup(t)
+	ctx := context.Background()
+	const pods, phone, tile = "5A:00:00:00:00:01", "5A:00:00:00:00:02", "00:11:22:33:44:55"
+	pp := func(batt string) string { // AirPods Pro 2 proximity pairing, status 0x2b, battery byte batt, case 80 %
+		return "0719011420" + "2b" + batt + "08" + "0300" + "00" + strings.Repeat("ab", 16)
+	}
+	feed(t, p,
+		bt(t, 0, events.TypeBtBleAdvObserved, `{"address":"`+pods+`","address_type":"random","rssi":-50,"manufacturer_id":76,"manufacturer_data":"12020003"}`),
+		bt(t, 1, events.TypeBtBleAdvObserved, `{"address":"`+pods+`","address_type":"random","rssi":-50,"manufacturer_id":76,"manufacturer_data":"`+pp("97")+`"}`),
+		bt(t, 2, events.TypeBtBleAdvObserved, `{"address":"`+pods+`","address_type":"random","rssi":-50,"manufacturer_id":76,"manufacturer_data":"12020003"}`),
+		bt(t, 3, events.TypeBtBleAdvObserved, `{"address":"`+pods+`","address_type":"random","rssi":-50,"manufacturer_id":76,"manufacturer_data":"`+pp("86")+`"}`),
+		bt(t, 4, events.TypeBtBleAdvObserved, `{"address":"`+phone+`","address_type":"random","rssi":-60,"manufacturer_id":76,"manufacturer_data":"1007351f1e64b3b818"}`),
+		bt(t, 5, events.TypeBtBleAdvObserved, `{"address":"`+phone+`","address_type":"random","rssi":-60,"manufacturer_id":76,"manufacturer_data":"0c0e00a7df5b3a2d0c4a1bb2c5e1f4d2"}`),
+		bt(t, 6, events.TypeBtBleAdvObserved, `{"address":"`+tile+`","address_type":"public","rssi":-70,"services":["feed"]}`),
+	)
+	if p.Failures.Load() != 0 {
+		t.Fatalf("failures=%d", p.Failures.Load())
+	}
+	d, err := st.GetBTDevice(ctx, storage.BTBLE, pods, "random")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Proximity Pairing (90) beat Find My near-owner (40) and was not downgraded;
+	// the second Proximity Pairing refreshed the battery (0x86 → right 80, left 60).
+	if d.Identity == nil || d.Identity.Label != "AirPods Pro (2nd gen)" || d.Identity.Battery == nil ||
+		*d.Identity.Battery.Left != 60 || *d.Identity.Battery.Right != 80 || *d.Identity.Battery.Case != 80 {
+		t.Fatalf("pods identity: %+v", d.Identity)
+	}
+	if d, _ = st.GetBTDevice(ctx, storage.BTBLE, phone, "random"); d.Identity == nil || d.Identity.Source != "Apple Continuity: Handoff" {
+		t.Fatalf("phone identity: %+v", d.Identity)
+	}
+
+	// Label joins by address; kind filter.
+	if err := st.SetDeviceLabel(ctx, storage.DeviceLabel{Address: tile, Label: "my keys", UpdatedAt: 1}); err != nil {
+		t.Fatal(err)
+	}
+	ls, n, err := st.ListBTDevices(ctx, storage.Page{Limit: 10}, storage.BTDeviceFilter{Kind: btident.KindTracker})
+	if err != nil || n != 1 || ls[0].Address != tile || ls[0].Label != "my keys" || ls[0].Identity.Tracker != btident.TrackerTile {
+		t.Fatalf("tracker filter: n=%d %+v err=%v", n, ls, err)
+	}
+
+	// Backfill: simulate rows stored before migration 0008 (identity unknown).
+	if _, err := st.DB().ExecContext(ctx, `UPDATE bt_devices SET identity = NULL, ident_kind = NULL`); err != nil {
+		t.Fatal(err)
+	}
+	checked, identified, err := bluetooth.BackfillIdentities(ctx, st)
+	if err != nil || checked != 3 || identified != 3 {
+		t.Fatalf("backfill: checked=%d identified=%d err=%v", checked, identified, err)
+	}
+	if d, _ = st.GetBTDevice(ctx, storage.BTBLE, pods, "random"); d.Identity == nil ||
+		d.Identity.Label != "AirPods Pro (2nd gen)" || *d.Identity.Battery.Left != 60 {
+		t.Fatalf("backfilled pods: %+v", d.Identity)
+	}
+	if checked, _, _ = bluetooth.BackfillIdentities(ctx, st); checked != 0 {
+		t.Fatalf("second backfill re-checked %d rows", checked)
+	}
+	// A row seen only through a device record (no stored adverts) falls back
+	// to its own manufacturer id.
+	feed(t, p, bt(t, 8, events.TypeBtBleDiscovered, `{"address":"5A:00:00:00:00:09","address_type":"random","manufacturer_id":76}`))
+	if _, err := st.DB().ExecContext(ctx, `UPDATE bt_devices SET identity = NULL, ident_kind = NULL WHERE address = '5A:00:00:00:00:09'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, n, _ := bluetooth.BackfillIdentities(ctx, st); n != 1 {
+		t.Fatalf("fallback backfill identified %d", n)
+	}
+	if d, _ = st.GetBTDevice(ctx, storage.BTBLE, "5A:00:00:00:00:09", "random"); d.Identity == nil || d.Identity.Label != "Apple device" {
+		t.Fatalf("fallback identity: %+v", d.Identity)
+	}
+	// Maker from the address: public (Gree prefix) yes, random no.
+	feed(t, p, bt(t, 7, events.TypeBtBleAdvObserved, `{"address":"94:24:B8:F8:6D:54","address_type":"public","rssi":-72,"manufacturer_id":93}`))
+	if d, _ = st.GetBTDevice(ctx, storage.BTBLE, "94:24:B8:F8:6D:54", "public"); d.AddressVendor != "Gree" {
+		t.Fatalf("public address vendor: %q", d.AddressVendor)
+	}
+	if d, _ = st.GetBTDevice(ctx, storage.BTBLE, pods, "random"); d.AddressVendor != "" {
+		t.Fatalf("random address got a vendor: %q", d.AddressVendor)
 	}
 }

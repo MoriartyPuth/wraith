@@ -193,16 +193,22 @@ func (s *Store) Search(ctx context.Context, q string, perKind int) ([]SearchHit,
 			return nil, err
 		}
 	}
-	err = run(`SELECT transport, address_type, address, IFNULL(name, ''), IFNULL(device_class, IFNULL(classification, '')), last_seen
+	err = run(`SELECT transport, address_type, address, IFNULL(name, ''),
+			IFNULL(device_class, IFNULL(json_extract(identity, '$.label'), IFNULL(classification, ''))), last_seen,
+			IFNULL((SELECT label FROM device_labels l WHERE l.address = bt_devices.address), '') AS lbl
 		FROM bt_devices WHERE LOWER(IFNULL(name, '')) LIKE ? ESCAPE '\' OR REPLACE(address, ':', '') LIKE ?
-		ORDER BY last_seen DESC LIMIT ?`, []any{text, addr, perKind},
+			OR LOWER(lbl) LIKE ? ESCAPE '\'
+		ORDER BY last_seen DESC LIMIT ?`, []any{text, addr, text, perKind},
 		func(r *sql.Rows) (SearchHit, error) {
 			var h SearchHit
-			var transport, at, address, name, class string
-			err := r.Scan(&transport, &at, &address, &name, &class, &h.LastSeen)
+			var transport, at, address, name, class, label string
+			err := r.Scan(&transport, &at, &address, &name, &class, &h.LastSeen, &label)
 			h.Kind, h.ID = "bt_device", BTDeviceID(transport, at, address)
-			h.Title = name
-			if name == "" {
+			h.Title = label
+			if h.Title == "" {
+				h.Title = name
+			}
+			if h.Title == "" {
 				h.Title = address
 			}
 			h.Detail = address + " · " + map[string]string{BTClassic: "Classic", BTBLE: "BLE"}[transport]

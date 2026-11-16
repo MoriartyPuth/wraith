@@ -14,6 +14,8 @@ Labels: `NOT IMPLEMENTED` · `IMPLEMENTED — NOT HARDWARE VALIDATED` ·
 | Wi-Fi clients: counts, devices-on-networks, maker, device guess, operator names | done (2026-11-16/17) |
 | Dashboard: master overview, coverage timeline, global search | done (2026-11-16) |
 | Dashboard: 15-row pagination on every list (shared `Pager`; event lists page server-side) | done (2026-11-17) |
+| Bluetooth identification: Apple Continuity (AirPods model + battery, iPhone/iPad/Mac, Watch, AirPlay, Find My), tracker services, names for Bluetooth devices, backfill (docs/bluetooth/identity.md) | done (2026-11-17), tested on real payloads |
+| Tracker detection: `bt_tracker_separated` extended to the `0xFCB2` alert; new `bt_tracker_lingering` | done (2026-11-17), unit + mutation tested; no tracker in range to test live |
 | macOS support for Core | not started (Linux-only serial + system code; see README) |
 
 ## Phase 0 — Discovery ✅ (2026-11-11)

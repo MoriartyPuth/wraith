@@ -164,6 +164,25 @@ docs/hardware.md).
   (WebDriver BiDi) saved, displayed and was found by search; temporary names
   removed afterwards.
 
+## Bluetooth identification and trackers (2026-11-17)
+
+- `core/internal/btident`: real Continuity payloads captured by nano-70b2a8
+  (Find My near owner, Nearby Info, Handoff, AirPlay Target with a second TLV,
+  Nearby Action, AirPlay Source) plus constructed AirPods Proximity Pairing
+  (model, both battery orientations, charging bits, unknown model, short
+  payload), iBeacon, tracker service UUIDs and precedence, and malformed or
+  truncated data.
+- `TestBluetoothIdentity` (pipeline): AirPods identity not downgraded by later
+  Find My adverts, battery refreshed, label joined, `kind` filter, backfill
+  of pre-0008 rows and its idempotence.
+- Detectors: separated via `0xFCB2`, Tile not reported as separated,
+  lingering (24 h threshold, once, named → skipped, separated / near-owner /
+  non-tracker skipped, already reported before a restart). Mutation checks: 5,
+  all caught (one only after adding the Tile-not-separated test).
+- Live: the backfill identified 84 of 110 stored BLE addresses in 69 ms. No
+  tracker or AirPods pairing advert was in range, so neither tracker detector
+  nor battery display has seen live data yet.
+
 ## Retention
 
 `PruneEvents` / `RunPruner` are covered by `core/internal/storage`:

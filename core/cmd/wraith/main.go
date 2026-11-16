@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/MoriartyPuth/wraith/core/internal/bluetooth"
 	"io"
 	"log/slog"
 	"net/http"
@@ -70,6 +71,21 @@ func run(args []string) error {
 	}
 	defer store.Close()
 	log.Info("database ready", "path", cfg.DBPath)
+
+	// Decode identities for Bluetooth devices stored before Core decoded them
+	// (migration 0008). One pass; rows are marked checked afterwards.
+	go func() {
+		start := time.Now()
+		checked, identified, err := bluetooth.BackfillIdentities(ctx, store)
+		if err != nil && ctx.Err() == nil {
+			log.Warn("bluetooth identity backfill failed", "err", err)
+			return
+		}
+		if checked > 0 {
+			log.Info("bluetooth identity backfill", "checked", checked, "identified", identified,
+				"took", time.Since(start).Round(time.Millisecond))
+		}
+	}()
 
 	// Retention: prune events (and their observations) older than the policy.
 	var prunedEvents, prunedObs atomic.Uint64

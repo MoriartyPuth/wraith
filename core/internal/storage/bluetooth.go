@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"github.com/MoriartyPuth/wraith/core/internal/btident"
+	"github.com/MoriartyPuth/wraith/core/internal/devid"
 	"strings"
 )
 
@@ -36,6 +38,16 @@ type BTDevice struct {
 	FirstSeen      int64    `json:"first_seen"`
 	LastSeen       int64    `json:"last_seen"`
 	LastSensor     *string  `json:"last_sensor"`
+	// Identity is decoded by Core from the device's advertisements
+	// (internal/btident); nil when nothing has been recognised.
+	Identity *btident.Identity `json:"identity"`
+	// IdentChecked: Core has decoded this row (Identity may still be nil).
+	IdentChecked bool `json:"-"`
+	// Label is the operator's name for this address (device_labels), "" if none.
+	Label string `json:"label"`
+	// AddressVendor is the IEEE maker of a vendor-assigned address (Classic
+	// BD_ADDRs and BLE public addresses only; random addresses have none).
+	AddressVendor string `json:"address_vendor"`
 }
 
 // BTDeviceID is the stable, URL-safe identifier of a device row:
@@ -90,16 +102,32 @@ type BTSensorStatus struct {
 
 const btDeviceCols = `transport, address, address_type, name, cod, device_class, classification,
 	confidence, manufacturer_id, tx_power, services, last_rssi, rssi_avg, observations,
-	first_seen, last_seen, last_sensor`
+	first_seen, last_seen, last_sensor, identity, ident_kind`
+
+// btSelect reads btDeviceCols plus the operator label.
+const btSelect = `SELECT ` + btDeviceCols + `,
+	IFNULL((SELECT label FROM device_labels l WHERE l.address = bt_devices.address), '') FROM bt_devices`
 
 func scanBTDevice(sc interface{ Scan(...any) error }) (BTDevice, error) {
 	var d BTDevice
 	var services string
+	var ident, kind sql.NullString
 	err := sc.Scan(&d.Transport, &d.Address, &d.AddressType, &d.Name, &d.CoD, &d.DeviceClass,
 		&d.Classification, &d.Confidence, &d.ManufacturerID, &d.TxPower, &services, &d.LastRSSI,
-		&d.RSSIAvg, &d.Observations, &d.FirstSeen, &d.LastSeen, &d.LastSensor)
+		&d.RSSIAvg, &d.Observations, &d.FirstSeen, &d.LastSeen, &d.LastSensor, &ident, &kind, &d.Label)
 	if err != nil {
 		return d, err
+	}
+	d.IdentChecked = kind.Valid
+	if d.Transport == BTClassic || d.AddressType == "public" {
+		d.AddressVendor = devid.Lookup(d.Address).Vendor
+	}
+	if ident.Valid && ident.String != "" {
+		var id btident.Identity
+		if err := json.Unmarshal([]byte(ident.String), &id); err != nil {
+			return d, err
+		}
+		d.Identity = &id
 	}
 	d.ID = BTDeviceID(d.Transport, d.AddressType, d.Address)
 	d.Services = []string{}
@@ -114,7 +142,7 @@ func scanBTDevice(sc interface{ Scan(...any) error }) (BTDevice, error) {
 func getBTDevice(ctx context.Context, q interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, transport, address, addrType string) (BTDevice, error) {
-	d, err := scanBTDevice(q.QueryRowContext(ctx, `SELECT `+btDeviceCols+` FROM bt_devices
+	d, err := scanBTDevice(q.QueryRowContext(ctx, btSelect+`
 		WHERE transport = ? AND address = ? AND address_type = ?`, transport, address, addrType))
 	if errors.Is(err, sql.ErrNoRows) {
 		return d, ErrNotFound
@@ -143,19 +171,39 @@ func (t *Tx) PutBTDevice(ctx context.Context, d BTDevice) error {
 	if err != nil {
 		return err
 	}
+	ident, kind, err := identCols(d)
+	if err != nil {
+		return err
+	}
 	_, err = t.tx.ExecContext(ctx, `INSERT INTO bt_devices (`+btDeviceCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(transport, address, address_type) DO UPDATE SET
 			name = excluded.name, cod = excluded.cod, device_class = excluded.device_class,
 			classification = excluded.classification, confidence = excluded.confidence,
 			manufacturer_id = excluded.manufacturer_id, tx_power = excluded.tx_power,
 			services = excluded.services, last_rssi = excluded.last_rssi, rssi_avg = excluded.rssi_avg,
 			observations = excluded.observations, last_seen = excluded.last_seen,
-			last_sensor = excluded.last_sensor`,
+			last_sensor = excluded.last_sensor, identity = excluded.identity, ident_kind = excluded.ident_kind`,
 		d.Transport, d.Address, d.AddressType, d.Name, d.CoD, d.DeviceClass, d.Classification,
 		d.Confidence, d.ManufacturerID, d.TxPower, string(services), d.LastRSSI, d.RSSIAvg,
-		d.Observations, d.FirstSeen, d.LastSeen, d.LastSensor)
+		d.Observations, d.FirstSeen, d.LastSeen, d.LastSensor, ident, kind)
 	return err
+}
+
+// identCols encodes the identity columns: NULLs while unchecked, ” kind when
+// checked with nothing recognised.
+func identCols(d BTDevice) (ident, kind any, err error) {
+	if d.Identity != nil {
+		b, err := json.Marshal(d.Identity)
+		if err != nil {
+			return nil, nil, err
+		}
+		return string(b), d.Identity.Kind, nil
+	}
+	if d.IdentChecked {
+		return nil, "", nil
+	}
+	return nil, nil, nil
 }
 
 // InsertBTObservation links a stored event to a device address.
@@ -209,6 +257,7 @@ func (t *Tx) RecordBTError(ctx context.Context, sensorID, code, message string, 
 type BTDeviceFilter struct {
 	Transport string // "classic" | "ble" | ""
 	Since     int64  // last_seen >= Since (Unix ms) when > 0
+	Kind      string // decoded identity kind (btident.Kinds) when non-empty
 }
 
 // ListBTDevices returns devices newest first.
@@ -223,11 +272,15 @@ func (s *Store) ListBTDevices(ctx context.Context, p Page, f BTDeviceFilter) ([]
 		where += " AND last_seen >= ?"
 		args = append(args, f.Since)
 	}
+	if f.Kind != "" {
+		where += " AND ident_kind = ?"
+		args = append(args, f.Kind)
+	}
 	var total int
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM bt_devices`+where, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT `+btDeviceCols+` FROM bt_devices`+where+
+	rows, err := s.db.QueryContext(ctx, btSelect+where+
 		` ORDER BY last_seen DESC, address LIMIT ? OFFSET ?`, append(args, p.Limit, p.Offset)...)
 	if err != nil {
 		return nil, 0, err
@@ -347,4 +400,62 @@ func (s *Store) ListBTDeviceEvents(ctx context.Context, p Page, transport, addre
 		out = append(out, e)
 	}
 	return out, total, rows.Err()
+}
+
+// UncheckedBLEDevices returns BLE device keys whose identity has never been
+// decoded (ident_kind IS NULL): rows stored before migration 0008.
+func (s *Store) UncheckedBLEDevices(ctx context.Context, limit int) ([][3]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT transport, address, address_type FROM bt_devices
+		WHERE transport = 'ble' AND ident_kind IS NULL LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out [][3]string
+	for rows.Next() {
+		var k [3]string
+		if err := rows.Scan(&k[0], &k[1], &k[2]); err != nil {
+			return nil, err
+		}
+		out = append(out, k)
+	}
+	return out, rows.Err()
+}
+
+// RecentBLEAdverts returns the metadata of a device's stored
+// bluetooth.ble.advertisement_observed events with their receive times,
+// newest first.
+func (s *Store) RecentBLEAdverts(ctx context.Context, address, addrType string, limit int) ([]json.RawMessage, []int64, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT json_extract(e.payload, '$.metadata'), e.received_at
+		FROM bt_observations o JOIN events e ON e.id = o.event_row
+		WHERE o.transport = 'ble' AND o.address = ? AND o.address_type = ?
+		  AND o.event_type = 'bluetooth.ble.advertisement_observed'
+		ORDER BY o.event_row DESC LIMIT ?`, address, addrType, limit)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	var metas []json.RawMessage
+	var times []int64
+	for rows.Next() {
+		var m string
+		var at int64
+		if err := rows.Scan(&m, &at); err != nil {
+			return nil, nil, err
+		}
+		metas, times = append(metas, json.RawMessage(m)), append(times, at)
+	}
+	return metas, times, rows.Err()
+}
+
+// SetBTIdentity stores a decoded identity (nil: checked, nothing recognised).
+func (s *Store) SetBTIdentity(ctx context.Context, transport, address, addrType string, id *btident.Identity) error {
+	ident, kind, err := identCols(BTDevice{Identity: id, IdentChecked: true})
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `UPDATE bt_devices SET identity = ?, ident_kind = ?
+		WHERE transport = ? AND address = ? AND address_type = ? AND ident_kind IS NULL`,
+		ident, kind, transport, address, addrType)
+	return err
 }

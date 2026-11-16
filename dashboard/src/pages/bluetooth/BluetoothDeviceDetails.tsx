@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { LabelEditor } from "../../components/LabelEditor";
 import { PAGE_SIZE, Pager } from "../../components/Pager";
 import { api } from "../../services/api";
 import { useApi } from "../../hooks/useApi";
@@ -8,7 +9,7 @@ import { Async, Badge, PageHeader, Panel, Table, td } from "../../components/ui"
 import { RssiChart } from "../../components/LazyCharts";
 import { ActiveBadge, ProvenanceBadge, TransportBadge } from "../../components/bluetooth/BTBadges";
 import type { BTDevice, GATTItem, Observation } from "../../types/api";
-import { deviceFields, shortUUID, uuidName } from "../../utils/bluetooth";
+import { btDisplayName, deviceFields, shortUUID, uuidName } from "../../utils/bluetooth";
 import { describeEvent } from "../../utils/describe";
 import { timeAgo } from "../../utils/format";
 
@@ -95,7 +96,7 @@ export default function BluetoothDeviceDetails() {
 
   return (
     <>
-      <PageHeader title={d?.name ?? (d ? "(no name)" : "Bluetooth device")}
+      <PageHeader title={d ? (btDisplayName(d) ?? "(no name)") : "Bluetooth device"}
         subtitle={d ? `${d.address}${d.transport === "ble" ? ` · ${d.address_type} address` : ""}` : id}
         right={d && <span className="flex items-center gap-2"><TransportBadge t={d.transport} /><ActiveBadge lastSeen={d.last_seen} /></span>} />
       <p className="mb-3 text-xs"><Link to={d?.transport === "ble" ? "/bluetooth/ble" : "/bluetooth/classic"} className="text-ink-3 hover:text-accent">← back to list</Link></p>
@@ -103,7 +104,9 @@ export default function BluetoothDeviceDetails() {
         {(r) => (
           <>
             <div className="grid gap-4 lg:grid-cols-2">
-              <Panel title="What WRAITH knows">
+              <Panel title="What WRAITH knows"
+                action={<span className="group"><LabelEditor address={r.data.address} label={r.data.label} onChanged={dev.reload}
+                  placeholder="e.g. my AirPods" /></span>}>
                 <Fields d={r.data} />
                 <p className="mt-2 text-xs text-ink-3">
                   <Badge t="good">observed</Badge> reported by the device or sensor · <Badge t="accent">derived</Badge> computed

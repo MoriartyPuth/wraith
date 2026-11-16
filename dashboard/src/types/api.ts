@@ -139,6 +139,25 @@ export interface BTDevice {
   manufacturer_id: number | null; tx_power: number | null; services: string[];
   last_rssi: number | null; rssi_avg: number | null; observations: number;
   first_seen: number; last_seen: number; last_sensor: string | null;
+  /** Decoded by Core from the advertisements (Apple Continuity, tracker services); null if nothing recognised. */
+  identity?: BTIdentity | null;
+  /** Operator's name for this address ("" when none). */
+  label?: string;
+  /** IEEE maker of a vendor-assigned address (Classic, BLE public); "" otherwise. */
+  address_vendor?: string;
+}
+
+export type BTKind = "phone_tablet_computer" | "headphones" | "watch" | "tv_speaker" | "tracker" | "find_my"
+  | "beacon" | "smart_home" | "other";
+
+export interface BTBattery {
+  left?: number; right?: number; case?: number;
+  left_charging?: boolean; right_charging?: boolean; case_charging?: boolean;
+}
+
+export interface BTIdentity {
+  kind: BTKind; label: string; source: string; rank: number;
+  tracker?: string; separated?: boolean; battery?: BTBattery; at?: number;
 }
 
 export interface BTObservation {

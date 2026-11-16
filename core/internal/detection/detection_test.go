@@ -11,7 +11,14 @@ import (
 	"github.com/MoriartyPuth/wraith/core/internal/storage"
 )
 
-type fakeLookup struct{ aps []storage.AccessPoint }
+type fakeLookup struct {
+	aps      []storage.AccessPoint
+	reported map[string]bool // category + "/" + bt device
+}
+
+func (f *fakeLookup) BTFindingExists(category, btDevice string) (bool, error) {
+	return f.reported[category+"/"+btDevice], nil
+}
 
 func (f *fakeLookup) APsBySSIDHex(hex string) ([]storage.AccessPoint, error) {
 	var out []storage.AccessPoint

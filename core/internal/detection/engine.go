@@ -26,6 +26,9 @@ const (
 type Lookup interface {
 	APsBySSIDHex(hex string) ([]storage.AccessPoint, error)
 	GetAP(bssid string) (*storage.AccessPoint, error) // nil if unknown
+	// BTFindingExists reports whether a finding of this category was ever
+	// stored for this Bluetooth device row (survives Core restarts).
+	BTFindingExists(category, btDevice string) (bool, error)
 }
 
 // Context is what a detector sees for one event.
@@ -80,6 +83,7 @@ func NewEngine() *Engine {
 		newPMFInvalidDetector(),
 		newBLEFloodDetector(),
 		newTrackerDetector(),
+		newTrackerLingeringDetector(),
 		newBTIdentityDetector(),
 	}}
 }

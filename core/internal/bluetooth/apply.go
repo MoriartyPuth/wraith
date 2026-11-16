@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/MoriartyPuth/wraith/core/internal/btident"
 	"strings"
 
 	"github.com/MoriartyPuth/wraith/core/internal/events"
@@ -54,6 +55,7 @@ func apply(ctx context.Context, tx *storage.Tx, ev *events.Event, eventRow, seen
 			Transport: storage.BTBLE, Address: m.Address, AddressType: m.AddressType,
 			Name: m.Name, TxPower: m.TxPower, Services: m.Services,
 			ManufacturerID: m.ManufacturerID, RSSI: &rssi, Count: countOr(m.Count, 1),
+			Identity: decode(m.ManufacturerID, m.ManufacturerData, m.Services, seenMS), Decoded: true,
 			Seen: seenMS, Sensor: ev.SensorID,
 		})
 
@@ -66,6 +68,9 @@ func apply(ctx context.Context, tx *storage.Tx, ev *events.Event, eventRow, seen
 			Transport: storage.BTBLE, Address: m.Address, AddressType: m.AddressType,
 			Name: m.Name, Services: m.Services, ManufacturerID: m.ManufacturerID,
 			Classification: m.Classification, Confidence: m.Confidence, RSSI: m.RSSI,
+			// Device records carry no manufacturer data: only service UUIDs
+			// (trackers, Fast Pair) and the company id can be recognised.
+			Identity: decode(m.ManufacturerID, nil, m.Services, seenMS), Decoded: true,
 			// A device record is a tracker snapshot; it only adds the
 			// observations it explicitly represents (no implicit +1).
 			Count: countOr(m.Count, 0),
@@ -141,6 +146,15 @@ func resolveBLEAddressType(ctx context.Context, tx *storage.Tx, m AddressMeta) (
 		return *m.AddressType, nil
 	}
 	return tx.LatestBLEAddressType(ctx, m.Address)
+}
+
+// decode runs btident.Decode and stamps the identity with the receive time.
+func decode(mfrID *int, mfrData *string, services []string, seenMS int64) *btident.Identity {
+	id := btident.Decode(mfrID, mfrData, services)
+	if id != nil {
+		id.At = seenMS
+	}
+	return id
 }
 
 func countOr(c *int64, def int64) int64 {

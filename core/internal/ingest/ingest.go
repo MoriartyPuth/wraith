@@ -109,6 +109,9 @@ type lookup struct {
 func (l lookup) APsBySSIDHex(hex string) ([]storage.AccessPoint, error) {
 	return l.tx.APsBySSIDHex(l.ctx, hex)
 }
+func (l lookup) BTFindingExists(category, btDevice string) (bool, error) {
+	return l.tx.FindingExistsSince(l.ctx, category, "", btDevice, 0)
+}
 func (l lookup) GetAP(bssid string) (*storage.AccessPoint, error) {
 	a, err := l.tx.GetAP(l.ctx, bssid)
 	if errors.Is(err, storage.ErrNotFound) {

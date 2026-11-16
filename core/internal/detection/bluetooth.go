@@ -2,6 +2,7 @@ package detection
 
 import (
 	"fmt"
+	"github.com/MoriartyPuth/wraith/core/internal/btident"
 	"slices"
 	"strings"
 	"time"
@@ -148,9 +149,10 @@ const (
 
 const trackerLimitations = "A fixed sensor cannot tell whether a tracker is following anyone: this says an item " +
 	"tracker that is away from its owner has stayed near the sensor. Neighbours' lost or stored items (keys, bags, " +
-	"a car parked nearby) look the same, as do other Find My network accessories that are separated from their " +
-	"owner. Only Apple Find My's separated-mode advert is recognised; Tile, Samsung SmartTag and Google's Find My " +
-	"Device network trackers are not detected. The sensor only listens while in Bluetooth mode, so presence " +
+	"a car parked nearby) look the same. Recognised separated-mode adverts: Apple Find My (AirTag and other Find My " +
+	"accessories) and the cross-platform unwanted-tracking alert (service 0xFCB2) that compliant Android-network " +
+	"trackers send. Tile, Samsung SmartTag and Chipolo trackers are recognised but do not advertise a separated " +
+	"state; they are covered by bt_tracker_lingering. The sensor only listens while in Bluetooth mode, so presence " +
 	"between sessions is assumed, not observed."
 
 type trackerSeen struct {
@@ -166,12 +168,16 @@ func newTrackerDetector() *trackerDetector { return &trackerDetector{seen: map[s
 
 func (d *trackerDetector) Name() string { return "bt_tracker_separated" }
 
-// findMySeparated: Apple manufacturer data with the Offline Finding type
-// (0x12) and the 25-byte payload a Find My accessory broadcasts once it is
-// separated from its owner's devices. Near its owner it sends the 2-byte form
-// (12 02), which is ignored.
-func findMySeparated(mfrID *int, mfrData *string) bool {
-	return mfrID != nil && *mfrID == 0x004C && mfrData != nil && strings.HasPrefix(strings.ToLower(*mfrData), "1219")
+// separatedTracker decodes an advert and returns its identity when it is an
+// item tracker broadcasting its away-from-owner state: Apple Find My's 25-byte
+// Offline Finding payload (12 19…; the near-owner 12 02 form is ignored) or
+// the cross-platform unwanted-tracking advert (service data 0xFCB2).
+func separatedTracker(m *bluetooth.BLEAdvMeta) *btident.Identity {
+	id := btident.Decode(m.ManufacturerID, m.ManufacturerData, m.Services)
+	if id.IsTracker() && id.Separated {
+		return id
+	}
+	return nil
 }
 
 func (d *trackerDetector) Observe(c *Context) []Finding {
@@ -180,7 +186,11 @@ func (d *trackerDetector) Observe(c *Context) []Finding {
 		return nil
 	}
 	var m bluetooth.BLEAdvMeta
-	if ev.DecodeMeta(&m) != nil || !findMySeparated(m.ManufacturerID, m.ManufacturerData) {
+	if ev.DecodeMeta(&m) != nil {
+		return nil
+	}
+	tid := separatedTracker(&m)
+	if tid == nil {
 		return nil
 	}
 	for k, s := range d.seen {
@@ -209,11 +219,65 @@ func (d *trackerDetector) Observe(c *Context) []Finding {
 	return []Finding{{
 		Category: "bt_tracker_separated", BTDevice: id, Severity: "medium", Confidence: 0.5,
 		Classification: ClassSuspicious, Evidence: s.evidence, Limitations: trackerLimitations,
-		Explanation: fmt.Sprintf("BLE address %s (%s) has broadcast Apple Find My's separated-from-owner advert "+
-			"for %s (%d reports, first %s). An item tracker away from its owner that stays near the sensor is the "+
-			"unwanted-tracking pattern; check whether it belongs to someone here.",
-			m.Address, m.AddressType, s.last.Sub(s.first).Round(time.Minute), s.reports,
+		Explanation: fmt.Sprintf("BLE address %s (%s) has broadcast a separated-from-owner tracker advert "+
+			"(%s: %s) for %s (%d reports, first %s). An item tracker away from its owner that stays near the "+
+			"sensor is the unwanted-tracking pattern; check whether it belongs to someone here.",
+			m.Address, m.AddressType, tid.Label, tid.Source, s.last.Sub(s.first).Round(time.Minute), s.reports,
 			s.first.UTC().Format(time.RFC3339)),
+	}}
+}
+
+// ---- bt_tracker_lingering ----
+
+// lingerMinSpan: how long one tracker address must have been around (first to
+// latest sighting, across Bluetooth sessions) before it is reported.
+const lingerMinSpan = 24 * time.Hour
+
+const lingerLimitations = "A fixed sensor sees trackers that live nearby: a neighbour's keys, a tracker in a " +
+	"parked car or a shared wall look the same as one hidden in your things. Only one address is followed: " +
+	"trackers that rotate their address (AirTag every ~24 h, most others more often) restart the clock, so this " +
+	"mainly catches trackers with a fixed address such as Tile. Samsung's 0xFD5A service is also used by Galaxy " +
+	"phones and earbuds. Name a tracker you own (\"name it\") and it is not reported again. Presence between " +
+	"Bluetooth sessions is assumed, not observed."
+
+// trackerLingeringDetector reports an item tracker (any recognised brand)
+// whose address has been around the sensor for at least lingerMinSpan and
+// that the operator has not named. Separated-mode trackers are left to
+// bt_tracker_separated. Once per device row, also across Core restarts.
+type trackerLingeringDetector struct{ done map[string]bool }
+
+func newTrackerLingeringDetector() *trackerLingeringDetector {
+	return &trackerLingeringDetector{done: map[string]bool{}}
+}
+
+func (d *trackerLingeringDetector) Name() string { return "bt_tracker_lingering" }
+
+func (d *trackerLingeringDetector) Observe(c *Context) []Finding {
+	cur := c.CurBT
+	if cur == nil || cur.Transport != storage.BTBLE || !cur.Identity.IsTracker() || cur.Identity.Separated ||
+		cur.Label != "" || d.done[cur.ID] {
+		return nil
+	}
+	span := time.Duration(cur.LastSeen-cur.FirstSeen) * time.Millisecond
+	if span < lingerMinSpan {
+		return nil
+	}
+	d.done[cur.ID] = true
+	if c.Lookup != nil {
+		if seen, err := c.Lookup.BTFindingExists(d.Name(), cur.ID); err != nil || seen {
+			return nil
+		}
+	}
+	id := cur.Identity
+	return []Finding{{
+		Category: "bt_tracker_lingering", BTDevice: cur.ID, Severity: "low", Confidence: 0.4,
+		Classification: ClassSuspicious, Evidence: []string{c.Event.EventID}, Limitations: lingerLimitations,
+		Explanation: fmt.Sprintf("An item tracker nobody here has named (%s, from %s) has been around the sensor "+
+			"for %s: BLE address %s (%s) first seen %s, last seen %s, %d observations. If it is yours, name it; "+
+			"if not, look for it among things that entered the space recently.",
+			id.Label, id.Source, span.Round(time.Hour), cur.Address, cur.AddressType,
+			time.UnixMilli(cur.FirstSeen).UTC().Format(time.RFC3339),
+			time.UnixMilli(cur.LastSeen).UTC().Format(time.RFC3339), cur.Observations),
 	}}
 }
 

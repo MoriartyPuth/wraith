@@ -121,3 +121,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	}
 	return nil
 }
+
+// DB exposes the underlying handle for tests and one-off diagnostics. Normal
+// code goes through Store methods.
+func (s *Store) DB() *sql.DB { return s.db }
