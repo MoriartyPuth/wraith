@@ -78,3 +78,70 @@ func TestClientsEndpoints(t *testing.T) {
 }
 
 func intp(v int) *int { return &v }
+
+// TestClientCounts covers the client counts on the AP list/detail and
+// /statistics: per-AP total vs recent (10-min window), APs without clients
+// report 0, and a station seen on two APs counts once in the statistics.
+func TestClientCounts(t *testing.T) {
+	srv, st := newTxServer(t, false, nil)
+	ctx := context.Background()
+	const apA, apB = "64:13:AB:A5:53:E8", "FC:12:2C:33:6A:58"
+	const apEmpty = "AA:BB:CC:DD:EE:01"
+	now := time.Now().UnixMilli()
+	old := now - int64(time.Hour/time.Millisecond)
+	err := st.WithTx(ctx, func(tx *storage.Tx) error {
+		for _, b := range []string{apA, apB, apEmpty} {
+			if err := tx.UpsertAP(ctx, storage.APUpdate{BSSID: b, Seen: now, Sensor: "nano-1"}); err != nil {
+				return err
+			}
+		}
+		for _, c := range []storage.ClientUpdate{
+			{BSSID: apA, Client: "11:11:11:11:11:01", Seen: now, Frames: 1, Sensor: "nano-1"},
+			{BSSID: apA, Client: "11:11:11:11:11:02", Seen: old, Frames: 1, Sensor: "nano-1"},
+			{BSSID: apA, Client: "11:11:11:11:11:03", Seen: old, Frames: 1, Sensor: "nano-1"},
+			// Same station also on apB (roamed): one distinct client overall.
+			{BSSID: apB, Client: "11:11:11:11:11:01", Seen: now, Frames: 1, Sensor: "nano-1"},
+		} {
+			if err := tx.UpsertClient(ctx, c); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := map[string][2]float64{apA: {3, 1}, apB: {1, 1}, apEmpty: {0, 0}}
+	code, body := get(t, srv, "/api/v1/access-points?limit=10")
+	if code != http.StatusOK {
+		t.Fatalf("aps: %d %v", code, body)
+	}
+	rows := body["data"].([]any)
+	if len(rows) != 3 {
+		t.Fatalf("ap rows: %v", rows)
+	}
+	for _, r := range rows {
+		a := r.(map[string]any)
+		w := want[a["bssid"].(string)]
+		if a["clients"] != w[0] || a["recent_clients"] != w[1] {
+			t.Fatalf("%s: clients=%v recent=%v, want %v", a["bssid"], a["clients"], a["recent_clients"], w)
+		}
+	}
+
+	code, body = get(t, srv, "/api/v1/access-points/"+apA)
+	if code != http.StatusOK {
+		t.Fatalf("ap: %d %v", code, body)
+	}
+	if a := body["data"].(map[string]any); a["clients"] != 3.0 || a["recent_clients"] != 1.0 {
+		t.Fatalf("ap detail counts: %v", a)
+	}
+
+	code, body = get(t, srv, "/api/v1/statistics")
+	if code != http.StatusOK {
+		t.Fatalf("stats: %d %v", code, body)
+	}
+	if body["clients"] != 3.0 || body["recent_clients"] != 1.0 || body["client_window_ms"] != 600000.0 {
+		t.Fatalf("stats counts: clients=%v recent=%v window=%v", body["clients"], body["recent_clients"], body["client_window_ms"])
+	}
+}

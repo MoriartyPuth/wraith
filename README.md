@@ -20,7 +20,8 @@ A local-first platform for passive Wi-Fi observation and defensive monitoring:
 >
 > **Client visibility (protocol v3):** Nano also captures 802.11 data-frame
 > headers (never payloads) to list stations seen talking to each AP; the
-> dashboard has a Clients page and each AP page lists its observed clients.
+> dashboard has a Clients page, each AP page lists its observed clients, the
+> Wi-Fi overview groups devices by network and the AP list shows client counts.
 >
 > **Bluetooth (in progress):** protocol v4, Core inventory, API and dashboard
 > for Bluetooth Classic + BLE are built and tested without hardware; the

@@ -147,6 +147,8 @@ docs/protocol.md (`wifi.client_observed`) and docs/hardware.md.
 | Core API: `GET /clients`, `GET /access-points/{bssid}/clients` | IMPLEMENTED — TESTED |
 | Dashboard: Clients page, per-AP clients panel, deauth client picker, live refresh | IMPLEMENTED — typecheck + build pass |
 | Hardware: confirm phones/laptops appear with real MACs on the lab AP | TESTED 2026-11-12 (data-frame headers on channel) |
+| Client counts: `clients`/`recent_clients` on `GET /access-points[/{bssid}]`, `clients`/`recent_clients`/`client_window_ms` (10 min, distinct MACs) on `/statistics` | IMPLEMENTED — TESTED (+ mutation-checked) |
+| Dashboard: Wi-Fi overview "Clients" stat + "Devices on networks" (grouped by SSID, roaming stations deduped), Clients column on Access Points, "private" (randomised MAC) and 10-min "active" badges | IMPLEMENTED — TESTED (unit) + live render check 2026-11-16 |
 
 ## Bluetooth track (started 2026-11-13)
 

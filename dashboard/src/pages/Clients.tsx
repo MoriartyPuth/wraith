@@ -6,6 +6,7 @@ import { useLiveRefresh } from "../services/live";
 import { Async, Badge, Input, Panel, PageHeader, Table, Toolbar, td } from "../components/ui";
 import { BssidLink } from "../components/badges";
 import { timeAgo } from "../utils/format";
+import { CLIENT_RECENT_MS, isPrivateMac } from "../utils/clients";
 
 export default function Clients() {
   const [params, setParams] = useSearchParams();
@@ -48,7 +49,10 @@ export default function Clients() {
             <Table head={["Client", "Access point", "Ch", "Last RSSI", "Frames", "First seen", "Last seen"]}>
               {rows.map((c) => (
                 <tr key={`${c.bssid}/${c.client}`}>
-                  <td className={`${td} font-mono text-xs whitespace-nowrap`}>{c.client}</td>
+                  <td className={`${td} font-mono text-xs whitespace-nowrap`}>
+                    {c.client}
+                    {isPrivateMac(c.client) && <span className="ml-1.5 font-sans"><Badge>private</Badge></span>}
+                  </td>
                   <td className={td}>
                     <Link to={`/access-points/${encodeURIComponent(c.bssid)}`} className="hover:text-accent">
                       {c.ssid || <span className="text-ink-3">(hidden)</span>}
@@ -62,7 +66,7 @@ export default function Clients() {
                   <td className={`${td} whitespace-nowrap`}>
                     <span className="inline-flex items-center gap-2">
                       {timeAgo(c.last_seen)}
-                      {Date.now() - c.last_seen < 120_000 && <Badge t="good">active</Badge>}
+                      {Date.now() - c.last_seen < CLIENT_RECENT_MS && <Badge t="good">active</Badge>}
                     </span>
                   </td>
                 </tr>
@@ -73,7 +77,9 @@ export default function Clients() {
       </Panel>
       <p className="mt-3 text-xs text-ink-3">
         WRAITH Nano sees client addresses in 802.11 data-frame headers on the channel it is tuned to (one channel at a
-        time, ~250 ms per hop), so coverage is best-effort. Encrypted payloads are not decrypted; only the MAC header is used.
+        time, ~250 ms per hop), so coverage is best-effort. &ldquo;Active&rdquo; = heard in the last 10 minutes.
+        &ldquo;Private&rdquo; = a locally administered (randomised) address, as phones use per network; the same phone can
+        appear under several addresses. Encrypted payloads are not decrypted; only the MAC header is used.
       </p>
     </>
   );

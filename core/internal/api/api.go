@@ -186,8 +186,38 @@ func (h *handlers) getSensor(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// clientRecentWindow is what the AP list and /statistics count as a
+// "recent" client (same window as Bluetooth's recently-seen counts).
+const clientRecentWindow = 10 * time.Minute
+
+// withClientCounts fills Clients/RecentClients on each AP (0 when none).
+func (h *handlers) withClientCounts(ctx context.Context, aps []storage.AccessPoint) error {
+	if len(aps) == 0 {
+		return nil
+	}
+	bssids := make([]string, len(aps))
+	for i, a := range aps {
+		bssids[i] = a.BSSID
+	}
+	counts, err := h.d.Store.CountClientsByAP(ctx, time.Now().Add(-clientRecentWindow).UnixMilli(), bssids...)
+	if err != nil {
+		return err
+	}
+	for i := range aps {
+		c := counts[aps[i].BSSID]
+		aps[i].Clients, aps[i].RecentClients = &c.Total, &c.Recent
+	}
+	return nil
+}
+
 func (h *handlers) listAPs(w http.ResponseWriter, r *http.Request) {
-	paged(w, r, h.d.Store.ListAccessPoints)
+	paged(w, r, func(ctx context.Context, p storage.Page) ([]storage.AccessPoint, int, error) {
+		aps, n, err := h.d.Store.ListAccessPoints(ctx, p)
+		if err != nil {
+			return nil, 0, err
+		}
+		return aps, n, h.withClientCounts(ctx, aps)
+	})
 }
 
 func (h *handlers) getAP(w http.ResponseWriter, r *http.Request) {
@@ -196,7 +226,15 @@ func (h *handlers) getAP(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid_parameter", "bssid must be AA:BB:CC:DD:EE:FF")
 		return
 	}
-	one(w, r, func(ctx context.Context) (storage.AccessPoint, error) { return h.d.Store.GetAccessPoint(ctx, bssid) })
+	one(w, r, func(ctx context.Context) (storage.AccessPoint, error) {
+		ap, err := h.d.Store.GetAccessPoint(ctx, bssid)
+		if err != nil {
+			return ap, err
+		}
+		aps := []storage.AccessPoint{ap}
+		err = h.withClientCounts(ctx, aps)
+		return aps[0], err
+	})
 }
 
 // listClients returns station sightings (protocol v3), optionally for one AP.
@@ -563,14 +601,22 @@ func (h *handlers) statistics(w http.ResponseWriter, r *http.Request) {
 		internal(w, h.d.Log, err)
 		return
 	}
+	clients, recent, err := h.d.Store.CountClients(r.Context(), time.Now().Add(-clientRecentWindow).UnixMilli())
+	if err != nil {
+		internal(w, h.d.Log, err)
+		return
+	}
 	var rt map[string]uint64
 	if h.d.RuntimeStats != nil {
 		rt = h.d.RuntimeStats()
 	}
 	writeJSON(w, http.StatusOK, struct {
 		storage.Stats
-		Runtime map[string]uint64 `json:"runtime"`
-	}{st, rt})
+		Clients        int               `json:"clients"`
+		RecentClients  int               `json:"recent_clients"`
+		ClientWindowMS int64             `json:"client_window_ms"`
+		Runtime        map[string]uint64 `json:"runtime"`
+	}{st, clients, recent, clientRecentWindow.Milliseconds(), rt})
 }
 
 // --- helpers ---

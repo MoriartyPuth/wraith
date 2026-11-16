@@ -69,6 +69,10 @@ type AccessPoint struct {
 	RSN         json.RawMessage `json:"rsn"`
 	PMF         string          `json:"pmf"`
 	LastSensor  *string         `json:"last_sensor"`
+	// Clients / RecentClients are filled only by the read API (AP list and
+	// detail); they are nil (omitted) on the live stream and inside ingest.
+	Clients       *int `json:"clients,omitempty"`
+	RecentClients *int `json:"recent_clients,omitempty"`
 }
 
 const apCols = `bssid, ssid, ssid_hex, first_seen, last_seen, last_channel, last_rssi, auth_mode, rsn, pmf, last_sensor`
@@ -427,6 +431,46 @@ func (s *Store) ListClients(ctx context.Context, p Page, bssid string) ([]Client
 		out = append(out, c)
 	}
 	return out, total, rows.Err()
+}
+
+// ClientCounts holds per-AP station counts: every client row on record
+// (within retention) and those heard at or after a cutoff.
+type ClientCounts struct{ Total, Recent int }
+
+// CountClientsByAP returns ClientCounts per BSSID for the given BSSIDs (all
+// BSSIDs if none are given). BSSIDs without clients are absent from the map.
+func (s *Store) CountClientsByAP(ctx context.Context, since int64, bssids ...string) (map[string]ClientCounts, error) {
+	q := `SELECT bssid, COUNT(*), COALESCE(SUM(last_seen >= ?), 0) FROM clients`
+	args := []any{since}
+	if len(bssids) > 0 {
+		q += ` WHERE bssid IN (?` + strings.Repeat(`,?`, len(bssids)-1) + `)`
+		for _, b := range bssids {
+			args = append(args, b)
+		}
+	}
+	rows, err := s.db.QueryContext(ctx, q+` GROUP BY bssid`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]ClientCounts{}
+	for rows.Next() {
+		var b string
+		var c ClientCounts
+		if err := rows.Scan(&b, &c.Total, &c.Recent); err != nil {
+			return nil, err
+		}
+		out[b] = c
+	}
+	return out, rows.Err()
+}
+
+// CountClients returns the number of distinct client addresses on record and
+// how many were heard at or after since. A station seen on two APs counts once.
+func (s *Store) CountClients(ctx context.Context, since int64) (total, recent int, err error) {
+	err = s.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT client),
+		COUNT(DISTINCT CASE WHEN last_seen >= ? THEN client END) FROM clients`, since).Scan(&total, &recent)
+	return total, recent, err
 }
 
 // GetClient returns one (BSSID, client) sighting row.

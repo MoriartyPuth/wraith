@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../services/api";
 import { useApi } from "../hooks/useApi";
 import { useLiveRefresh } from "../services/live";
@@ -21,7 +22,7 @@ export default function AccessPoints() {
       <Panel>
         <Async state={aps} isEmpty={(d) => d.data.length === 0} empty="No access points observed yet.">
           {(d) => (
-            <Table head={["SSID", "BSSID", "Ch", "Last RSSI", "Security", "PMF", "First seen", "Last seen"]}>
+            <Table head={["SSID", "BSSID", "Ch", "Last RSSI", "Security", "PMF", "Clients", "First seen", "Last seen"]}>
               {d.data.filter((a) => !needle || a.ssid.toLowerCase().includes(needle) || a.bssid.toLowerCase().includes(needle)).map((a) => (
                 <tr key={a.bssid}>
                   <td className={td}>{a.ssid || <span className="text-ink-3">(hidden)</span>}</td>
@@ -30,6 +31,14 @@ export default function AccessPoints() {
                   <td className={`${td} tabular-nums`}>{a.last_rssi ?? "—"}</td>
                   <td className={td}><AuthBadge mode={a.auth_mode} /></td>
                   <td className={td}><PmfBadge pmf={a.pmf} /></td>
+                  <td className={`${td} whitespace-nowrap tabular-nums`}>
+                    {a.clients ? (
+                      <Link to={`/clients?bssid=${encodeURIComponent(a.bssid)}`} className="hover:text-accent"
+                        title={`${a.clients} client device(s) seen; ${a.recent_clients ?? 0} in the last 10 min`}>
+                        {a.clients}{a.recent_clients ? <span className="text-good"> · {a.recent_clients} active</span> : null}
+                      </Link>
+                    ) : <span className="text-ink-3">{a.clients === 0 ? "0" : "—"}</span>}
+                  </td>
                   <td className={`${td} whitespace-nowrap`}>{timeAgo(a.first_seen)}</td>
                   <td className={`${td} whitespace-nowrap`}>{timeAgo(a.last_seen)}</td>
                 </tr>

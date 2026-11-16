@@ -9,6 +9,7 @@ import { TxCard } from "../components/TxCard";
 import type { RSNInfo } from "../types/api";
 import { describeEvent } from "../utils/describe";
 import { timeAgo } from "../utils/format";
+import { CLIENT_RECENT_MS, isPrivateMac } from "../utils/clients";
 
 function Field({ k, children }: { k: string; children: React.ReactNode }) {
   return <div className="contents"><dt className="text-ink-3">{k}</dt><dd className="min-w-0 break-words">{children}</dd></div>;
@@ -86,12 +87,20 @@ export default function APDetail() {
               <Table head={["Client", "Ch", "Last RSSI", "Frames", "First seen", "Last seen"]}>
                 {d.data.map((c) => (
                   <tr key={c.client}>
-                    <td className={`${td} font-mono text-xs whitespace-nowrap`}>{c.client}</td>
+                    <td className={`${td} font-mono text-xs whitespace-nowrap`}>
+                      {c.client}
+                      {isPrivateMac(c.client) && <span className="ml-1.5 font-sans"><Badge>private</Badge></span>}
+                    </td>
                     <td className={`${td} tabular-nums`}>{c.last_channel ?? "—"}</td>
                     <td className={`${td} tabular-nums`}>{c.last_rssi ?? "—"}</td>
                     <td className={`${td} tabular-nums`}>{c.frames}</td>
                     <td className={`${td} whitespace-nowrap`}>{timeAgo(c.first_seen)}</td>
-                    <td className={`${td} whitespace-nowrap`}>{timeAgo(c.last_seen)}</td>
+                    <td className={`${td} whitespace-nowrap`}>
+                      <span className="inline-flex items-center gap-2">
+                        {timeAgo(c.last_seen)}
+                        {Date.now() - c.last_seen < CLIENT_RECENT_MS && <Badge t="good">active</Badge>}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </Table>

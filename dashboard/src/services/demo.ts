@@ -49,6 +49,12 @@ export const clients: Client[] = [
     last_seen: T0 - 120_000, frames: 7, last_rssi: (aps[2]!.last_rssi ?? -72) + 3, last_channel: aps[2]!.last_channel, last_sensor: SENSOR },
 ];
 
+for (const a of aps) {
+  const mine = clients.filter((c) => c.bssid === a.bssid);
+  a.clients = mine.length;
+  a.recent_clients = mine.filter((c) => T0 - c.last_seen < 600_000).length;
+}
+
 let id = 0;
 const ev = (type: string, at: number, metadata: object, bssid: string | null = null, channel: number | null = null): StoredEvent => {
   id++;
@@ -120,7 +126,10 @@ export function statistics(): Statistics {
   const byType: Record<string, number> = {};
   for (const e of events) byType[e.event_type] = (byType[e.event_type] ?? 0) + 1;
   return { sensors: 1, access_points: aps.length, events: events.length, findings: findings.length,
-    open_findings: findings.filter((f) => f.status === "open").length, aps_by_channel: byCh, events_by_type: byType, runtime: null };
+    open_findings: findings.filter((f) => f.status === "open").length, aps_by_channel: byCh, events_by_type: byType, runtime: null,
+    clients: new Set(clients.map((c) => c.client)).size,
+    recent_clients: new Set(clients.filter((c) => Date.now() - c.last_seen < 600_000).map((c) => c.client)).size,
+    client_window_ms: 600_000 };
 }
 
 // ---- Bluetooth demo (protocol v4). Switch mode: the demo sensor is back in

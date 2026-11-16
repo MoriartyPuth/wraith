@@ -63,6 +63,8 @@ export interface AccessPoint {
   bssid: string; ssid: string; ssid_hex: string; first_seen: number; last_seen: number;
   last_channel: number | null; last_rssi: number | null; auth_mode: string | null;
   rsn: unknown; pmf: PMF; last_sensor: string | null;
+  /** Client counts (REST list/detail only; absent on the live stream). */
+  clients?: number; recent_clients?: number;
 }
 
 // A station seen exchanging data with an AP (protocol v3). A sighting, not
@@ -93,6 +95,8 @@ export interface Finding {
 export interface Statistics {
   sensors: number; access_points: number; events: number; findings: number; open_findings: number;
   aps_by_channel: Record<string, number>; events_by_type: Record<string, number>;
+  /** Distinct client addresses on record / heard within client_window_ms. */
+  clients?: number; recent_clients?: number; client_window_ms?: number;
   runtime: Record<string, number> | null;
 }
 
