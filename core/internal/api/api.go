@@ -124,6 +124,7 @@ func (h *handlers) routes(r chi.Router) {
 		r.Post("/tx", h.txSend)
 		r.Post("/tx/stop", h.txStop)
 		h.btRoutes(r)
+		h.labelRoutes(r)
 	}
 }
 

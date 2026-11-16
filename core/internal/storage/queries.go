@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MoriartyPuth/wraith/core/internal/devid"
 	"strings"
 )
 
@@ -391,15 +392,30 @@ type Client struct {
 	LastRSSI    *int    `json:"last_rssi"`
 	LastChannel *int    `json:"last_channel"`
 	LastSensor  *string `json:"last_sensor"`
+	// Derived from the client address (package devid), never observed:
+	// manufacturer for vendor-assigned addresses, a device-type guess, and
+	// whether the address is private (randomised).
+	Vendor     string `json:"vendor"`
+	VendorFull string `json:"vendor_full"`
+	DeviceHint string `json:"device_hint"`
+	Private    bool   `json:"private"`
+	// Label is the operator's name for this address (device_labels), "" if none.
+	Label string `json:"label"`
 }
 
+// clientCols must be used with "FROM clients c LEFT JOIN access_points a ON
+// a.bssid = c.bssid" + clientLabelJoin.
 const clientCols = `c.bssid, c.client, IFNULL(a.ssid, ''), c.first_seen, c.last_seen, c.frames,
-	c.last_rssi, c.last_channel, c.last_sensor`
+	c.last_rssi, c.last_channel, c.last_sensor, IFNULL(l.label, '')`
+
+const clientLabelJoin = ` LEFT JOIN device_labels l ON l.address = c.client`
 
 func scanClient(sc interface{ Scan(...any) error }) (Client, error) {
 	var c Client
 	err := sc.Scan(&c.BSSID, &c.Client, &c.SSID, &c.FirstSeen, &c.LastSeen, &c.Frames,
-		&c.LastRSSI, &c.LastChannel, &c.LastSensor)
+		&c.LastRSSI, &c.LastChannel, &c.LastSensor, &c.Label)
+	d := devid.Lookup(c.Client)
+	c.Vendor, c.VendorFull, c.DeviceHint, c.Private = d.Vendor, d.VendorFull, d.Hint, d.Private
 	return c, err
 }
 
@@ -416,7 +432,7 @@ func (s *Store) ListClients(ctx context.Context, p Page, bssid string) ([]Client
 		return nil, 0, err
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT `+clientCols+` FROM clients c
-		LEFT JOIN access_points a ON a.bssid = c.bssid`+where+
+		LEFT JOIN access_points a ON a.bssid = c.bssid`+clientLabelJoin+where+
 		` ORDER BY c.last_seen DESC, c.client LIMIT ? OFFSET ?`, append(args, p.Limit, p.Offset)...)
 	if err != nil {
 		return nil, 0, err
@@ -476,9 +492,54 @@ func (s *Store) CountClients(ctx context.Context, since int64) (total, recent in
 // GetClient returns one (BSSID, client) sighting row.
 func (s *Store) GetClient(ctx context.Context, bssid, client string) (Client, error) {
 	c, err := scanClient(s.db.QueryRowContext(ctx, `SELECT `+clientCols+` FROM clients c
-		LEFT JOIN access_points a ON a.bssid = c.bssid WHERE c.bssid = ? AND c.client = ?`, bssid, client))
+		LEFT JOIN access_points a ON a.bssid = c.bssid`+clientLabelJoin+` WHERE c.bssid = ? AND c.client = ?`, bssid, client))
 	if errors.Is(err, sql.ErrNoRows) {
 		return c, ErrNotFound
 	}
 	return c, err
+}
+
+// DeviceLabel is an operator-assigned name for a device address.
+type DeviceLabel struct {
+	Address   string `json:"address"`
+	Label     string `json:"label"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
+// ListDeviceLabels returns all labels, by address.
+func (s *Store) ListDeviceLabels(ctx context.Context) ([]DeviceLabel, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT address, label, updated_at FROM device_labels ORDER BY address`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []DeviceLabel{}
+	for rows.Next() {
+		var l DeviceLabel
+		if err := rows.Scan(&l.Address, &l.Label, &l.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
+}
+
+// SetDeviceLabel creates or replaces the label for address.
+func (s *Store) SetDeviceLabel(ctx context.Context, l DeviceLabel) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO device_labels(address, label, updated_at) VALUES (?, ?, ?)
+		ON CONFLICT(address) DO UPDATE SET label = excluded.label, updated_at = excluded.updated_at`,
+		l.Address, l.Label, l.UpdatedAt)
+	return err
+}
+
+// DeleteDeviceLabel removes the label for address; ErrNotFound if none.
+func (s *Store) DeleteDeviceLabel(ctx context.Context, address string) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM device_labels WHERE address = ?`, address)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

@@ -9,7 +9,8 @@ import { TxCard } from "../components/TxCard";
 import type { RSNInfo } from "../types/api";
 import { describeEvent } from "../utils/describe";
 import { timeAgo } from "../utils/format";
-import { CLIENT_RECENT_MS, isPrivateMac } from "../utils/clients";
+import { CLIENT_RECENT_MS } from "../utils/clients";
+import { ClientDevice } from "../components/ClientDevice";
 
 function Field({ k, children }: { k: string; children: React.ReactNode }) {
   return <div className="contents"><dt className="text-ink-3">{k}</dt><dd className="min-w-0 break-words">{children}</dd></div>;
@@ -84,13 +85,11 @@ export default function APDetail() {
           <Async state={clients} isEmpty={(d) => d.data.length === 0}
             empty="No data frames from clients have been observed on this AP yet.">
             {(d) => (
-              <Table head={["Client", "Ch", "Last RSSI", "Frames", "First seen", "Last seen"]}>
+              <Table head={["Device", "Address", "Ch", "Last RSSI", "Frames", "First seen", "Last seen"]}>
                 {d.data.map((c) => (
                   <tr key={c.client}>
-                    <td className={`${td} font-mono text-xs whitespace-nowrap`}>
-                      {c.client}
-                      {isPrivateMac(c.client) && <span className="ml-1.5 font-sans"><Badge>private</Badge></span>}
-                    </td>
+                    <td className={td}><ClientDevice c={c} onChanged={clients.reload} /></td>
+                    <td className={`${td} font-mono text-xs whitespace-nowrap`}>{c.client}</td>
                     <td className={`${td} tabular-nums`}>{c.last_channel ?? "—"}</td>
                     <td className={`${td} tabular-nums`}>{c.last_rssi ?? "—"}</td>
                     <td className={`${td} tabular-nums`}>{c.frames}</td>

@@ -1,7 +1,7 @@
 // Centralized WRAITH Core API client. In demo mode every call is answered
 // from the labelled demo dataset instead of the network.
 import type {
-  AccessPoint, ApiErrorBody, BTDevice, BTScheduleState, BTSchedule, Coverage, SearchHit, BTObservation, BTStatus, BTTransport, Client, EventQuery, Finding, GATTItem, Health,
+  AccessPoint, ApiErrorBody, BTDevice, BTScheduleState, BTSchedule, Coverage, SearchHit, BTObservation, BTStatus, BTTransport, Client, DeviceLabel, EventQuery, Finding, GATTItem, Health,
   Observation, One, Paged, ProviderStatus, Sensor, Statistics, StoredEvent, SystemInfo, TxAccepted, TxRequest,
   WirelessInterface,
 } from "../types/api";
@@ -184,6 +184,18 @@ export const api = {
     return request<One<{ mode: string; classic: boolean; command: string; note: string }>>("/bluetooth/mode", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
+  },
+
+  /** Operator names for device addresses (shown on client rows). Demo mode keeps them in memory. */
+  setDeviceLabel: (address: string, label: string) => {
+    if (isDemo()) return Promise.resolve({ data: demo.setLabel(address, label) });
+    return request<One<DeviceLabel>>(`/device-labels/${encodeURIComponent(address)}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label }),
+    });
+  },
+  deleteDeviceLabel: async (address: string) => {
+    if (isDemo()) { demo.setLabel(address, ""); return; }
+    await request<null>(`/device-labels/${encodeURIComponent(address)}`, { method: "DELETE" });
   },
 
   /** Unattended Bluetooth session schedule (Core-driven; pauses Wi-Fi during each session). */

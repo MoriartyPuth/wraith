@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"github.com/MoriartyPuth/wraith/core/internal/devid"
 	"regexp"
 	"strconv"
 	"strings"
@@ -160,19 +161,26 @@ func (s *Store) Search(ctx context.Context, q string, perKind int) ([]SearchHit,
 	if err != nil {
 		return nil, err
 	}
-	if addr != "\x00" {
-		err = run(`SELECT c.client, COUNT(*), MAX(c.last_seen),
+	{
+		err = run(`SELECT c.client, COUNT(*), MAX(c.last_seen), IFNULL(l.label, ''),
 				IFNULL((SELECT COALESCE(NULLIF(a.ssid, ''), c2.bssid) FROM clients c2 LEFT JOIN access_points a ON a.bssid = c2.bssid
 				        WHERE c2.client = c.client ORDER BY c2.last_seen DESC LIMIT 1), '')
-			FROM clients c WHERE REPLACE(c.client, ':', '') LIKE ?
-			GROUP BY c.client ORDER BY MAX(c.last_seen) DESC LIMIT ?`, []any{addr, perKind},
+			FROM clients c LEFT JOIN device_labels l ON l.address = c.client
+			WHERE REPLACE(c.client, ':', '') LIKE ? OR LOWER(IFNULL(l.label, '')) LIKE ? ESCAPE '\'
+			GROUP BY c.client ORDER BY MAX(c.last_seen) DESC LIMIT ?`, []any{addr, text, perKind},
 			func(r *sql.Rows) (SearchHit, error) {
 				var h SearchHit
 				var n int
-				var ssid string
-				err := r.Scan(&h.ID, &n, &h.LastSeen, &ssid)
+				var ssid, label string
+				err := r.Scan(&h.ID, &n, &h.LastSeen, &label, &ssid)
 				h.Kind, h.Title = "client", h.ID
 				h.Detail = "client"
+				if label != "" {
+					h.Title, h.Detail = label, h.ID
+				}
+				if v := devid.Lookup(h.ID).Vendor; v != "" {
+					h.Detail += " · " + v
+				}
 				if ssid != "" {
 					h.Detail += " · last with " + ssid
 				}

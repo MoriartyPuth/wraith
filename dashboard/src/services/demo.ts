@@ -49,6 +49,19 @@ export const clients: Client[] = [
     last_seen: T0 - 120_000, frames: 7, last_rssi: (aps[2]!.last_rssi ?? -72) + 3, last_channel: aps[2]!.last_channel, last_sensor: SENSOR },
 ];
 
+// Address-derived fields as Core would add them (devid): two private
+// addresses and one vendor (Foxconn) address.
+Object.assign(clients[0]!, { private: true, vendor: "", vendor_full: "", device_hint: "private address: usually a phone, tablet or laptop", label: "Demo phone" });
+Object.assign(clients[1]!, { private: true, vendor: "", vendor_full: "", device_hint: "private address: usually a phone, tablet or laptop", label: "" });
+Object.assign(clients[2]!, { private: false, vendor: "Foxconn", vendor_full: "CLOUD NETWORK TECHNOLOGY SINGAPORE PTE. LTD.", device_hint: "laptop, PC or console", label: "" });
+
+/** In-memory label store for demo mode ("" removes). */
+export function setLabel(address: string, label: string) {
+  const a = address.toUpperCase();
+  for (const c of clients) if (c.client === a) c.label = label.trim();
+  return { address: a, label: label.trim(), updated_at: Date.now() };
+}
+
 for (const a of aps) {
   const mine = clients.filter((c) => c.bssid === a.bssid);
   a.clients = mine.length;

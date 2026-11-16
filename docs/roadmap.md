@@ -149,6 +149,8 @@ docs/protocol.md (`wifi.client_observed`) and docs/hardware.md.
 | Hardware: confirm phones/laptops appear with real MACs on the lab AP | TESTED 2026-11-12 (data-frame headers on channel) |
 | Client counts: `clients`/`recent_clients` on `GET /access-points[/{bssid}]`, `clients`/`recent_clients`/`client_window_ms` (10 min, distinct MACs) on `/statistics` | IMPLEMENTED — TESTED (+ mutation-checked) |
 | Dashboard: Wi-Fi overview "Clients" stat + "Devices on networks" (grouped by SSID, roaming stations deduped), Clients column on Access Points, "private" (randomised MAC) and 10-min "active" badges | IMPLEMENTED — TESTED (unit) + live render check 2026-11-16 |
+| Device identification (docs/clients.md): embedded IEEE maker table (`core/internal/devid`, `scripts/gen-oui.sh`), device-type guess, private-address flag on client rows | IMPLEMENTED — TESTED |
+| Operator device names: migration 0007 `device_labels`, `GET/PUT/DELETE /device-labels`, label on client rows + search; dashboard "Device" column with inline naming, names on overview chips | IMPLEMENTED — TESTED (+ mutation-checked) + live check 2026-11-17 |
 
 ## Bluetooth track (started 2026-11-13)
 

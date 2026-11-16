@@ -10,7 +10,7 @@ import { ProviderList } from "./Settings";
 import { describeEvent } from "../utils/describe";
 import { isBluetoothFinding } from "../utils/bluetooth";
 import { clockTime, duration, timeAgo } from "../utils/format";
-import { CLIENT_RECENT_MS, groupByNetwork, isPrivateMac } from "../utils/clients";
+import { CLIENT_RECENT_MS, chipHint, clientIsPrivate, clientName, groupByNetwork } from "../utils/clients";
 import type { Client } from "../types/api";
 
 /** Wi-Fi section landing page (the master overview is pages/Overview.tsx). */
@@ -150,13 +150,19 @@ function NetworkClientList({ networks, windowMs }: { networks: ReturnType<typeof
 }
 
 function ClientChip({ c, active }: { c: Client; active: boolean }) {
-  const priv = isPrivateMac(c.client);
+  const priv = clientIsPrivate(c);
+  const name = clientName(c);
+  const tip = [
+    c.label, c.client, c.vendor_full && `maker: ${c.vendor_full}`, c.device_hint && `likely ${c.device_hint}`,
+    `last seen ${timeAgo(c.last_seen)}`, `${c.frames} frames`, c.last_rssi !== null && `${c.last_rssi} dBm`,
+  ].filter(Boolean).join(" · ");
   return (
-    <span title={`${c.client}${priv ? " (private / randomised address)" : ""} · last seen ${timeAgo(c.last_seen)} · ${c.frames} frames${c.last_rssi !== null ? ` · ${c.last_rssi} dBm` : ""}`}
-      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-xs ${active ? "border-good/40 text-ink" : "border-line text-ink-3"}`}>
+    <span title={tip}
+      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs ${name ? "" : "font-mono"} ${active ? "border-good/40 text-ink" : "border-line text-ink-3"}`}>
       {active && <span className="h-1.5 w-1.5 rounded-full bg-good" aria-label="active" />}
-      {c.client}
-      {priv && <span className="font-sans text-[10px] uppercase text-ink-3">private</span>}
+      {name ? <span className={c.label ? "font-medium" : ""}>{name}</span> : c.client}
+      {!c.label && c.vendor && chipHint(c.device_hint) && <span className="text-[10px] text-ink-3">{chipHint(c.device_hint)}</span>}
+      {!name && priv && <span className="font-sans text-[10px] uppercase text-ink-3">private</span>}
     </span>
   );
 }

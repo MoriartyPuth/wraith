@@ -73,7 +73,13 @@ export interface Client {
   bssid: string; client: string; ssid: string;
   first_seen: number; last_seen: number; frames: number;
   last_rssi: number | null; last_channel: number | null; last_sensor: string | null;
+  /** Derived from the address only (manufacturer registry), never observed. */
+  vendor?: string; vendor_full?: string; device_hint?: string; private?: boolean;
+  /** Operator's name for this address ("" when none). */
+  label?: string;
 }
+
+export interface DeviceLabel { address: string; label: string; updated_at: number }
 
 export interface StoredEvent {
   id: number; event_id: string; sensor_id: string; source: string; event_type: string;

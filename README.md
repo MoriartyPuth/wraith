@@ -22,6 +22,9 @@ A local-first platform for passive Wi-Fi observation and defensive monitoring:
 > headers (never payloads) to list stations seen talking to each AP; the
 > dashboard has a Clients page, each AP page lists its observed clients, the
 > Wi-Fi overview groups devices by network and the AP list shows client counts.
+> Clients show the maker (from the address) and a device-type guess, and you
+> can name your own devices; see [docs/clients.md](docs/clients.md) for why
+> "iPhone"/"iPad" cannot be seen directly.
 >
 > **Bluetooth (in progress):** protocol v4, Core inventory, API and dashboard
 > for Bluetooth Classic + BLE are built and tested without hardware; the

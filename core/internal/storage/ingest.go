@@ -262,7 +262,7 @@ func (t *Tx) UpsertClient(ctx context.Context, u ClientUpdate) error {
 // GetClient returns one sighting row inside the transaction.
 func (t *Tx) GetClient(ctx context.Context, bssid, client string) (Client, error) {
 	c, err := scanClient(t.tx.QueryRowContext(ctx, `SELECT `+clientCols+` FROM clients c
-		LEFT JOIN access_points a ON a.bssid = c.bssid WHERE c.bssid = ? AND c.client = ?`, bssid, client))
+		LEFT JOIN access_points a ON a.bssid = c.bssid`+clientLabelJoin+` WHERE c.bssid = ? AND c.client = ?`, bssid, client))
 	if errors.Is(err, sql.ErrNoRows) {
 		return c, ErrNotFound
 	}

@@ -44,3 +44,24 @@ export function groupByNetwork(rows: Client[], now: number, windowMs = CLIENT_RE
       recent: clients.filter((c) => now - c.last_seen < windowMs).length };
   }).sort((a, b) => b.recent - a.recent || b.clients.length - a.clients.length || a.key.localeCompare(b.key));
 }
+
+/** Private (randomised) address: Core's flag, else computed from the address. */
+export const clientIsPrivate = (c: Client) => c.private ?? isPrivateMac(c.client);
+
+/** Short display name: the operator's label, else the manufacturer, else null. */
+export const clientName = (c: Client): string | null => c.label || c.vendor || null;
+
+/** True when text matches a client's address, network, label or manufacturer info. */
+export function clientMatches(c: Client, needle: string): boolean {
+  if (!needle) return true;
+  return [c.client, c.ssid, c.bssid, c.label, c.vendor, c.vendor_full, c.device_hint]
+    .some((v) => v?.toLowerCase().includes(needle));
+}
+
+/**
+ * A device guess short enough for a chip: only single-category guesses
+ * ("camera", "air conditioner"); multi-way guesses ("TV or appliance",
+ * "iPhone, iPad, Mac or …") return "" so the chip doesn't overclaim.
+ */
+export const chipHint = (hint?: string): string =>
+  hint && !/,| or /.test(hint) && hint.length <= 24 ? hint : "";
