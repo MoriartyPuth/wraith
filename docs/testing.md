@@ -143,6 +143,27 @@ encoded path, filters). `check-protocol.sh` validates firmware-emitted
 captures data-frame headers when tuned to the AP's channel (best-effort; see
 docs/hardware.md).
 
+## Client counts and device identification (2026-11-16/17)
+
+- `TestClientCounts`: per-AP `clients` / `recent_clients` (10-min window),
+  APs without clients report 0, a roaming station counts once in
+  `/statistics`.
+- `core/internal/devid`: maker lookup for real prefixes (Apple, Ezviz, Gree,
+  Intel, LG, Huawei, TP-Link, Foxconn), private/multicast/malformed
+  addresses, name shortening, embedded table size.
+- `TestDeviceLabelsAndVendor`: label PUT/GET/DELETE, validation (empty,
+  > 48 characters, control characters, unknown fields, wrong content type,
+  bad address), lower-case path, trimming, client rows carrying label + maker
+  fields, search by label and by address.
+- Mutation checks: recent-window comparison, `DISTINCT` in the client total,
+  the label clause in search and label trimming. Each one fails a test.
+- Dashboard (Vitest): grouping by network with roaming dedup, private-MAC
+  bit, name/match helpers, chip hints only for single-category guesses.
+- Live (2026-11-17): 51 clients on 11 networks; all 16 vendor-assigned
+  addresses resolved; naming a device through the UI in headless Firefox
+  (WebDriver BiDi) saved, displayed and was found by search; temporary names
+  removed afterwards.
+
 ## Retention
 
 `PruneEvents` / `RunPruner` are covered by `core/internal/storage`:
@@ -154,8 +175,10 @@ initial backlog sweep, and the keep-forever (retention 0) case.
 - Deauthentication *burst* findings from frames an ESP32 actually received
   (would require generating frames WRAITH deliberately does not emit).
 - Multi-hour soak (in progress; see docs/roadmap.md Phase 6).
-- Dashboard rendering with populated data was not screenshotted (headless
-  Firefox captures before fetches resolve); empty/loading states were inspected.
+- Dashboard rendering with populated data is now checked by driving headless
+  Firefox over WebDriver BiDi and waiting for the data (since 2026-11-16);
+  `firefox --screenshot` alone captures before fetches resolve.
+- Device-type guesses are a fixed maker table, not validated per device.
 
 ## Controlled lab tests (Phase 6)
 

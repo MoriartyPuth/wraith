@@ -3,6 +3,18 @@
 Labels: `NOT IMPLEMENTED` · `IMPLEMENTED — NOT HARDWARE VALIDATED` ·
 `IMPLEMENTED — TESTED` · `BLOCKED — HARDWARE REQUIRED`
 
+## At a glance (2026-11-17)
+
+| Area | State |
+|------|-------|
+| Wi-Fi phases 0–5, 7, 8 (sensor, Core, dashboard, integration, gated TX, clients) | done, validated on hardware |
+| Phase 6 validation | retention + docs review done; full-day soak and day-long false-positive review optional / open |
+| Bluetooth BT-1 … BT-8, BT-10 … BT-12 + scheduled sessions | done, validated on hardware |
+| BT-9 GATT discovery (optional, active) | not implemented; needs a BLE device you own |
+| Wi-Fi clients: counts, devices-on-networks, maker, device guess, operator names | done (2026-11-16/17) |
+| Dashboard: master overview, coverage timeline, global search | done (2026-11-16) |
+| macOS support for Core | not started (Linux-only serial + system code; see README) |
+
 ## Phase 0 — Discovery ✅ (2026-11-11)
 
 - [x] Fedora 44 / kernel 7.2.11 inspected

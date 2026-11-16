@@ -1,9 +1,8 @@
 # Bluetooth dashboard
 
 Status: **IMPLEMENTED — TESTED** (unit tests, typecheck, build, rendered in
-headless Firefox against a real Core with pipeline-seeded data and in demo
-mode). No firmware produces Bluetooth events yet, so on a live system the
-pages show their empty states until the Bluetooth firmware build exists.
+headless Firefox against a real Core with pipeline-seeded data, in demo mode,
+and with live data from the `bt` firmware build since BT-6).
 
 Navigation (2026-11-16): a master **Overview** (`/`) on top, then a **Wi-Fi**
 group (Wi-Fi overview at `/wifi` and the Wi-Fi pages), a **Bluetooth** group,

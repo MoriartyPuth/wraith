@@ -278,7 +278,7 @@ Core rejects invalid events with a reason (`unsupported_version`,
 | `hello` | `{"protocol": N}` on connect, where `N` is Core's newest protocol version (currently 4) |
 | `event` | stored event row (`id`, `event_id`, `event_type`, `payload`, …), after commit; `bluetooth.ble.advertisement_observed` is not streamed raw (see `bt_device`) |
 | `access_point` | AP inventory row after an AP-related event |
-| `client` | client sighting row after a `wifi.client_observed` event (v3) |
+| `client` | client sighting row after a `wifi.client_observed` event (v3), incl. Core-derived `vendor`, `vendor_full`, `device_hint`, `private` and the operator `label` (docs/clients.md) |
 | `finding` | new detection finding |
 | `sensor` | sensor row after heartbeat/status/restart |
 | `provider` | capture provider status change |

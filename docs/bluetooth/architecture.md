@@ -1,10 +1,12 @@
 # Bluetooth subsystem — architecture and coexistence
 
-Status: protocol v4, Core inventory ([event-protocol.md](event-protocol.md)),
-REST/WebSocket API ([api.md](api.md)), dashboard ([dashboard.md](dashboard.md))
-the firmware **switch-mode foundation** (BT-5) and **passive BLE scanning**
-(BT-6) and bounded **Classic inquiry** (BT-7) exist and are **validated on
-hardware** ([testing.md](testing.md)).
+Status (2026-11-17): **implemented and validated on hardware**: protocol v4,
+Core inventory ([event-protocol.md](event-protocol.md)), REST/WebSocket API
+([api.md](api.md)), dashboard ([dashboard.md](dashboard.md)), switch mode
+(BT-5), passive BLE scanning (BT-6), bounded Classic inquiry (BT-7),
+detectors (BT-10), LCD screens (BT-11), full regression (BT-12) and scheduled
+sessions ([schedule.md](schedule.md)); see [testing.md](testing.md). Not
+implemented: optional operator-initiated GATT discovery (BT-9).
 
 ## Decision: one board, switch mode (2026-11-13)
 

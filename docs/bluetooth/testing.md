@@ -1,8 +1,9 @@
 # Bluetooth testing
 
-What is tested, how, and what is not. Everything below runs without
-hardware; **no Bluetooth feature has been validated on an ESP32 yet** (the
-Bluetooth firmware build is a later phase).
+What is tested, how, and what is not. The protocol, Core and dashboard
+sections run without hardware. The firmware features are host-tested **and
+validated on the ESP32** (sections marked "Hardware", up to the BT-12 full
+regression).
 
 `scripts/check-all.sh` runs all of it (Go, protocol, firmware host tests,
 both firmware builds, dashboard unit tests, typecheck, build).

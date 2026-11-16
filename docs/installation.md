@@ -28,9 +28,25 @@ cd dashboard && npm install && npm run dev     # http://127.0.0.1:5173
 cd dashboard && npm run build
 cd ../core && go run ./cmd/wraith -dashboard-dir ../dashboard/dist
 
-# Firmware (once PlatformIO is installed and the board identified)
-cd firmware && pio run && pio run -t upload && pio device monitor
+# Firmware (see "Firmware builds" below; stop the service first)
+cd firmware && pio run -e wraith-nano -t upload && pio device monitor -b 115200
 ```
+
+## Firmware builds
+
+| PlatformIO env | What it is | Protocol |
+|----------------|------------|----------|
+| `wraith-nano` (default) | Passive Wi-Fi monitor: APs, management frames, client sightings, LCD | v3 |
+| `bt` | Same Wi-Fi monitor + Bluetooth **switch mode** (BLE passive scan, opt-in Classic inquiry); 3 MB app partition; no deauth TX | v4 |
+| `tx` | Wi-Fi monitor + gated deauth test transmission (docs/tx.md) | v3 (incl. `tx.ack` / `tx.report`) |
+| `native` | Host unit tests only (`scripts/firmware-host-tests.sh`) | — |
+
+Flash with `systemctl --user stop wraith-core` first (the service holds the
+port), then `pio run -e <env> -t upload`, then `systemctl --user start
+wraith-core`. Use 115200 baud. Always update Core **before** flashing a build
+with a newer protocol: an older Core rejects v4 events.
+`scripts/esp32-switch.sh` backs up and restores whole-flash images (it stops
+and restarts the service on its own).
 
 ## Run as a service (systemd user unit)
 
@@ -48,12 +64,54 @@ predates joining `dialout`, the unit starts Core via `sg dialout`; re-run the
 installer after your next login to switch to a direct start with
 `NoNewPrivileges=yes`. The service runs while you are logged in.
 
+## Upgrading Core
+
+Re-run `scripts/install-user-service.sh` (with `WRAITH_TX_ENABLED=1` if you use
+`-tx`; the installer drops the flag otherwise) after pulling changes. Database
+migrations apply automatically at start-up and are additive. To keep a
+restorable copy first:
+
+```bash
+sqlite3 ~/.local/share/wraith/wraith.db ".backup $HOME/.local/share/wraith/wraith.db.bak"
+```
+
+(Use `.backup`, not `cp`, because the database runs in WAL mode.)
+
+## Bluetooth (bt build)
+
+Switch the radio from the dashboard (Bluetooth → Overview) or the API:
+
+```bash
+curl -X POST -H 'Content-Type: application/json' -d '{"mode":"bluetooth"}' \
+  http://127.0.0.1:8088/api/v1/bluetooth/mode            # BLE only (passive)
+#  {"mode":"bluetooth","classic":true}  adds Classic inquiry (transmits)
+#  {"mode":"wifi"}                      back to Wi-Fi monitoring
+```
+
+Wi-Fi monitoring pauses during a Bluetooth session. The sensor returns to
+Wi-Fi by itself after 15 minutes or 6 s after Core stops talking to it.
+Scheduled sessions (e.g. 2 minutes every hour) are set under Bluetooth →
+Overview → Scheduled sessions; see docs/bluetooth/schedule.md.
+
+## Client maker database
+
+The maker shown for Wi-Fi clients comes from an IEEE MA-L table embedded in
+Core (`core/internal/devid/oui.tsv.gz`). To refresh it from Fedora's `hwdata`
+(or an IEEE `oui.txt` passed as an argument), then rebuild and reinstall Core:
+
+```bash
+scripts/gen-oui.sh [path/to/oui.txt]
+```
+
+Names you give devices are stored in the `device_labels` table and are never
+pruned. See docs/clients.md.
+
 ## Data retention
 
 Core prunes events (and the observations linked to them) older than
 `event_retention_days` (default **7**). Wi-Fi client sightings and Bluetooth
 device rows not seen within that window are removed too. Findings and the
-access-point inventory are never auto-pruned. Pruning runs every `prune_interval_minutes`
+access-point inventory and device names are never auto-pruned. Pruning runs every `prune_interval_minutes`
 (default 60) in batches, so it never holds a long write lock.
 
 ```bash

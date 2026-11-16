@@ -59,6 +59,9 @@ which BSSID. Coverage is inherently best-effort:
 
 The sensor does not decrypt payloads and does not track association state; a
 `wifi.client_observed` event means "seen exchanging data", not "connected now".
+Core adds the maker (from the address prefix), a device-type guess and your
+own names on top; see [clients.md](clients.md) for what can and cannot be
+identified.
 
 ### Deauth test transmission (optional, gated)
 

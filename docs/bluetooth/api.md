@@ -1,11 +1,12 @@
 # Bluetooth API (REST + live stream)
 
 Status: **IMPLEMENTED — TESTED** (endpoint tests through the real ingest
-pipeline, throttle tests, real-binary smoke test). No firmware produces
-Bluetooth events yet, so on a live system every list is empty until the
-Bluetooth firmware build exists.
+pipeline, throttle tests, real-binary smoke test) and in use with the `bt`
+firmware build on hardware. The GATT endpoints stay empty: GATT discovery
+(BT-9) is not implemented.
 
-All endpoints are read-only, under `/api/v1`, on Core's existing router: same
+All endpoints are read-only except `POST /bluetooth/mode` (below) and
+`PUT /bluetooth/schedule` ([schedule.md](schedule.md)). They live under `/api/v1`, on Core's existing router: same
 loopback host guard (DNS-rebinding protection), 15 s request timeout,
 pagination (`limit` 1–500, `offset`) and error format
 (`{"error":{"code","message"}}`) as every other endpoint. No separate server.
