@@ -23,6 +23,7 @@ const ClassicDevices = lazy(() => import("../pages/bluetooth/ClassicDevices"));
 const BLEDevices = lazy(() => import("../pages/bluetooth/BLEDevices"));
 const BluetoothDeviceDetails = lazy(() => import("../pages/bluetooth/BluetoothDeviceDetails"));
 const BluetoothEvents = lazy(() => import("../pages/bluetooth/BluetoothEvents"));
+const Watchlist = lazy(() => import("../pages/bluetooth/Watchlist"));
 
 export function App() {
   return (
@@ -48,6 +49,7 @@ export function App() {
             <Route path="bluetooth/ble" element={<BLEDevices />} />
             <Route path="bluetooth/devices/:id" element={<BluetoothDeviceDetails />} />
             <Route path="bluetooth/events" element={<BluetoothEvents />} />
+            <Route path="bluetooth/watchlist" element={<Watchlist />} />
             <Route path="*" element={<Empty>Page not found.</Empty>} />
           </Route>
         </Routes>

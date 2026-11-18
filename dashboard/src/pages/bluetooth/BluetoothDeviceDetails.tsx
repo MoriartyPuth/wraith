@@ -5,13 +5,13 @@ import { PAGE_SIZE, Pager } from "../../components/Pager";
 import { api } from "../../services/api";
 import { useApi } from "../../hooks/useApi";
 import { useLiveRefresh } from "../../services/live";
-import { Async, Badge, PageHeader, Panel, Table, td } from "../../components/ui";
+import { Async, Badge, Button, PageHeader, Panel, Table, td } from "../../components/ui";
 import { RssiChart } from "../../components/LazyCharts";
 import { ActiveBadge, ProvenanceBadge, TransportBadge } from "../../components/bluetooth/BTBadges";
 import type { BTDevice, GATTItem, Observation } from "../../types/api";
 import { btDisplayName, deviceFields, shortUUID, uuidName } from "../../utils/bluetooth";
 import { describeEvent } from "../../utils/describe";
-import { timeAgo } from "../../utils/format";
+import { duration, timeAgo } from "../../utils/format";
 
 function uuidCell(u: string) {
   const n = uuidName(u);
@@ -88,8 +88,27 @@ export default function BluetoothDeviceDetails() {
   const [evOffset, setEvOffset] = useState(0);
   useEffect(() => setEvOffset(0), [id]);
   const evs = useApi((s) => api.btDeviceEvents(id, PAGE_SIZE, evOffset, s), 30000, [id, evOffset]);
+  const watches = useApi((s) => api.btWatchlist(s), 60000);
+  const sess = useApi((s) => api.btDeviceSessions(id, undefined, s), 30000, [id]);
   useLiveRefresh(["bt_device"], dev.reload, 3000);
   useLiveRefresh(["bt_device"], obs.reload, 3000);
+  useLiveRefresh(["bt_device"], sess.reload, 5000);
+  const watched = watches.data?.data.find((w) => w.id === id);
+  const [busyW, setBusyW] = useState(false);
+  const [errW, setErrW] = useState<string | null>(null);
+  const toggleWatch = async () => {
+    setBusyW(true);
+    setErrW(null);
+    try {
+      if (watched) await api.btUnwatch(id);
+      else await api.btWatch(id, dev.data?.data.label ?? "");
+      watches.reload();
+    } catch (e) {
+      setErrW(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyW(false);
+    }
+  };
   const points: Observation[] = useMemo(() => (obs.data?.data ?? [])
     .map((o) => ({ sensor_id: o.sensor_id, channel: null, rssi: o.rssi, observed_at: o.observed_at })), [obs.data]);
   const d = dev.data?.data;
@@ -98,7 +117,15 @@ export default function BluetoothDeviceDetails() {
     <>
       <PageHeader title={d ? (btDisplayName(d) ?? "(no name)") : "Bluetooth device"}
         subtitle={d ? `${d.address}${d.transport === "ble" ? ` · ${d.address_type} address` : ""}` : id}
-        right={d && <span className="flex items-center gap-2"><TransportBadge t={d.transport} /><ActiveBadge lastSeen={d.last_seen} /></span>} />
+        right={d && (
+          <span className="flex items-center gap-2">
+            <Button variant={watched ? "default" : "primary"} disabled={busyW} onClick={() => void toggleWatch()}>
+              {watched ? "Unwatch" : "Watch"}
+            </Button>
+            <TransportBadge t={d.transport} /><ActiveBadge lastSeen={d.last_seen} />
+          </span>
+        )} />
+      {errW && <p className="mb-3 text-sm text-bad">{errW}</p>}
       <p className="mb-3 text-xs"><Link to={d?.transport === "ble" ? "/bluetooth/ble" : "/bluetooth/classic"} className="text-ink-3 hover:text-accent">← back to list</Link></p>
       <Async state={dev} what="device">
         {(r) => (
@@ -119,6 +146,34 @@ export default function BluetoothDeviceDetails() {
                 </Async>
               </Panel>
             </div>
+            <Panel title="Presence · last 24 h" className="mt-4"
+              action={sess.data && (
+                <span className="flex items-center gap-2 text-xs">
+                  <Badge t={sess.data.data.present ? "good" : "neutral"}>{sess.data.data.present ? "present" : "away"}</Badge>
+                  <span className="text-ink-3">dwell {duration(Math.round(sess.data.data.dwell_ms / 1000))}</span>
+                </span>
+              )}>
+              <Async state={sess} isEmpty={(x) => x.data.sessions.length === 0}
+                empty="No sightings in the last 24 hours.">
+                {(x) => (
+                  <Table head={["Start", "End", "Duration", "Sightings"]}>
+                    {x.data.sessions.slice(-20).reverse().map((p) => (
+                      <tr key={p.start}>
+                        <td className={`${td} whitespace-nowrap`}>{new Date(p.start).toLocaleString()}</td>
+                        <td className={`${td} whitespace-nowrap`}>{p.ongoing ? <Badge t="good">ongoing</Badge> : new Date(p.end).toLocaleString()}</td>
+                        <td className={`${td} tabular-nums`}>{duration(Math.round(p.duration_ms / 1000))}</td>
+                        <td className={`${td} tabular-nums`}>{p.sightings}</td>
+                      </tr>
+                    ))}
+                  </Table>
+                )}
+              </Async>
+              <p className="mt-2 text-xs text-ink-3">
+                A session is a run of sightings with gaps ≤ 5 min; a device is present until 5 min after its last sighting.
+                Add it to the <Link to="/bluetooth/watchlist" className="text-accent hover:underline">watchlist</Link> to get
+                arrival/departure findings.
+              </p>
+            </Panel>
             {r.data.transport === "ble" && <GATTPanel id={id} />}
             <Panel title="Events for this address" className="mt-4">
               <Async state={evs} isEmpty={(e) => e.data.length === 0} empty="No stored events (older events are removed by retention).">

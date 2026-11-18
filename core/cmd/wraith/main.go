@@ -31,6 +31,7 @@ import (
 	"github.com/MoriartyPuth/wraith/core/internal/detection"
 	"github.com/MoriartyPuth/wraith/core/internal/events"
 	"github.com/MoriartyPuth/wraith/core/internal/ingest"
+	"github.com/MoriartyPuth/wraith/core/internal/presence"
 	"github.com/MoriartyPuth/wraith/core/internal/storage"
 	"github.com/MoriartyPuth/wraith/core/internal/stream"
 	"github.com/MoriartyPuth/wraith/core/internal/system"
@@ -103,6 +104,8 @@ func run(args []string) error {
 	}
 
 	hub := stream.NewHub(log, cfg.AllowedHosts)
+	// Watchlist presence: derive arrive/leave findings from stored sightings.
+	go presence.New(store, log, hub).Run(ctx, presence.EvalIntervalSeconds*time.Second)
 	pipe := ingest.New(store, detection.NewEngine(), hub, log)
 	providers := []capture.CaptureProvider{
 		serial.New(serial.Options{Port: cfg.SerialPort, Baud: cfg.SerialBaud,

@@ -177,6 +177,25 @@ export interface BTStatus {
   devices: { classic: number; ble: number; total: number; recent_classic: number; recent_ble: number; recent_window_ms: number };
 }
 
+/** Operator watchlist row (docs/bluetooth/watchlist.md). */
+export interface WatchEntry {
+  id: string; transport: BTTransport; address: string; address_type: string;
+  label: string; added_at: number; present: boolean;
+  state_since: number | null; last_eval_at: number | null;
+}
+
+/** Watchlist row plus device snapshot and presence over the last 24 h. */
+export interface WatchView extends WatchEntry {
+  device?: BTDevice | null;
+  last_seen: number | null;
+  sessions_24h: number;
+  dwell_ms_24h: number;
+}
+
+/** One contiguous presence session (gap > 5 min splits sessions). */
+export interface PresenceSession { start: number; end: number; duration_ms: number; sightings: number; ongoing: boolean }
+export interface DeviceSessions { now: number; since: number; present: boolean; sessions: PresenceSession[]; dwell_ms: number }
+
 /** A GATT service or characteristic found by operator-initiated discovery. */
 export interface GATTItem {
   uuid: string; service_uuid?: string; handle?: number; start_handle?: number; end_handle?: number;

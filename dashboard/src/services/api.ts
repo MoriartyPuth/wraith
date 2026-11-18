@@ -1,9 +1,9 @@
 // Centralized WRAITH Core API client. In demo mode every call is answered
 // from the labelled demo dataset instead of the network.
 import type {
-  AccessPoint, ApiErrorBody, BTDevice, BTScheduleState, BTSchedule, Coverage, SearchHit, BTObservation, BTStatus, BTTransport, Client, DeviceLabel, EventQuery, Finding, GATTItem, Health,
+  AccessPoint, ApiErrorBody, BTDevice, BTScheduleState, BTSchedule, Coverage, SearchHit, BTObservation, BTStatus, BTTransport, Client, DeviceLabel, DeviceSessions, EventQuery, Finding, GATTItem, Health,
   Observation, One, Paged, ProviderStatus, Sensor, Statistics, StoredEvent, SystemInfo, TxAccepted, TxRequest,
-  WirelessInterface,
+  WatchEntry, WatchView, WirelessInterface,
 } from "../types/api";
 import { isDemo } from "./mode";
 import { demoSearch } from "../utils/overview";
@@ -170,6 +170,37 @@ export const api = {
   btEvents: (q: EventQuery = {}, limit?: number, offset?: number, s?: AbortSignal) =>
     isDemo() ? resolve(paged(demoEvents(q).filter((e) => e.event_type.startsWith("bluetooth.")), limit, offset))
       : get<Paged<StoredEvent>>(`/bluetooth/events?${page(limit, offset)}${eventQuery({ ...q, bssid: undefined })}`, s),
+
+  // ---- Watchlist + presence (docs/bluetooth/watchlist.md) ----
+  btWatchlist: (s?: AbortSignal) =>
+    isDemo() ? resolve({ data: demo.watchlist }) : get<{ data: WatchView[] }>("/bluetooth/watchlist", s),
+  btWatch: (id: string, label = "") => {
+    if (isDemo()) {
+      const d = demo.btDevices.find((x) => x.id === id);
+      if (!d) return notFound();
+      return resolve({ data: demo.addWatch(d, label) });
+    }
+    return request<One<WatchEntry>>(`/bluetooth/watchlist/${encodeURIComponent(id)}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label }),
+    });
+  },
+  btUnwatch: (id: string) => {
+    if (isDemo()) {
+      demo.removeWatch(id);
+      return resolve(null);
+    }
+    return request<null>(`/bluetooth/watchlist/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  btWatchSessions: (id: string, since?: number, s?: AbortSignal) => {
+    if (isDemo()) return resolve({ data: demo.sessions(id, since) });
+    const q = since ? `?since=${since}` : "";
+    return get<{ data: DeviceSessions }>(`/bluetooth/watchlist/${encodeURIComponent(id)}/sessions${q}`, s);
+  },
+  btDeviceSessions: (id: string, since?: number, s?: AbortSignal) => {
+    if (isDemo()) return resolve({ data: demo.sessions(id, since) });
+    const q = since ? `?since=${since}` : "";
+    return get<{ data: DeviceSessions }>(`/bluetooth/devices/${encodeURIComponent(id)}/sessions${q}`, s);
+  },
 
   /** Ask a switch-mode sensor to change radio mode (docs/bluetooth/api.md).
    * "bluetooth" pauses Wi-Fi monitoring on that sensor; classic true/false

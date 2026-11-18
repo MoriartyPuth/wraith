@@ -42,6 +42,9 @@ is `400 invalid_parameter`; a well-formed id that was never observed is `404`.
 | `GET /bluetooth/ble/devices/{id}/services` | GATT services found by operator-initiated discovery (newest per UUID) |
 | `GET /bluetooth/ble/devices/{id}/characteristics` | GATT characteristics (newest per service/UUID/handle); `truncated: true` if more than 1000 GATT events exist |
 | `GET /bluetooth/events` | Event history restricted to `bluetooth.*`; same filters as `/events` (`type`, `sensor`, `since`, `until`, `event_id`) except `bssid`; a non-Bluetooth `type` is `400` |
+| `GET /bluetooth/devices/{id}/sessions` | presence sessions (and present/dwell) for any observed device |
+| `GET/PUT/DELETE /bluetooth/watchlist[/{id}]` | operator watchlist; `PUT` body `{"label":"..."}`; see [watchlist.md](watchlist.md) |
+| `GET /bluetooth/watchlist/{id}/sessions` | presence sessions for a watched address |
 
 Device fields (see [event-protocol.md](event-protocol.md), "Core inventory"):
 `id, transport, address, address_type, name, cod, device_class,
@@ -53,6 +56,10 @@ sensor's inference and comes with `confidence`.
 
 GATT lists are empty unless an operator ran GATT discovery on that device
 (off by default; a later phase).
+
+Watchlist and presence are Core-side: they are derived from stored sightings
+and need no sensor support. Rules, findings and limits:
+[watchlist.md](watchlist.md).
 
 ## Radio mode (switch-mode sensors)
 

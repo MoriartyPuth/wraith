@@ -96,8 +96,10 @@ function SensorCard({ s }: { s: BTSensorStatus }) {
 export default function BluetoothOverview() {
   const status = useApi((s) => api.btStatus(s), 15000);
   const devices = useApi((s) => api.btDevices({}, HIST_LIMIT, 0, s), 30000);
+  const wl = useApi((s) => api.btWatchlist(s), 30000);
   useLiveRefresh(["bt_status"], status.reload, 1000);
   useLiveRefresh(["bt_device"], devices.reload, 5000);
+  useLiveRefresh(["bt_device"], wl.reload, 5000);
   const st = status.data?.data;
   const all = devices.data?.data ?? [];
   const hist = rssiHistogram(all);

@@ -27,10 +27,15 @@ func (h *handlers) btRoutes(r chi.Router) {
 	r.Get("/bluetooth/devices/{id}", h.btDevice)
 	r.Get("/bluetooth/devices/{id}/observations", h.btObservations)
 	r.Get("/bluetooth/devices/{id}/events", h.btDeviceEvents)
+	r.Get("/bluetooth/devices/{id}/sessions", h.deviceSessions)
 	r.Get("/bluetooth/ble/devices/{id}/services", h.btGATT(events.TypeBtGattService))
 	r.Get("/bluetooth/ble/devices/{id}/characteristics", h.btGATT(events.TypeBtGattChar))
 	r.Get("/bluetooth/events", h.btEvents)
 	r.Post("/bluetooth/mode", h.btMode)
+	r.Get("/bluetooth/watchlist", h.watchlist)
+	r.Put("/bluetooth/watchlist/{id}", h.putWatch)
+	r.Delete("/bluetooth/watchlist/{id}", h.deleteWatch)
+	r.Get("/bluetooth/watchlist/{id}/sessions", h.watchSessions)
 }
 
 // btRecentWindow is what /bluetooth/status counts as "recently seen".

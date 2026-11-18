@@ -31,6 +31,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/bluetooth", label: "Overview" },
       { to: "/bluetooth/classic", label: "Classic" },
       { to: "/bluetooth/ble", label: "BLE" },
+      { to: "/bluetooth/watchlist", label: "Watchlist" },
       { to: "/bluetooth/events", label: "Events" },
     ],
   },

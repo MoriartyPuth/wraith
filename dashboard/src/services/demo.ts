@@ -2,8 +2,8 @@
 // prefix and every SSID/explanation is marked "Demo", so demo data can never
 // be mistaken for an observation. Deterministic (seeded PRNG).
 import type { BTScheduleState, Coverage, CoverageSegment,
-  AccessPoint, BTDevice, BTObservation, BTStatus, Client, Finding, GATTItem, Health, Observation, ProviderStatus, Sensor,
-  Statistics, StoredEvent, SystemInfo,
+  AccessPoint, BTDevice, BTObservation, BTStatus, Client, DeviceSessions, Finding, GATTItem, Health, Observation,
+  PresenceSession, ProviderStatus, Sensor, Statistics, StoredEvent, SystemInfo, WatchEntry, WatchView,
 } from "../types/api";
 
 const T0 = Date.now();
@@ -198,6 +198,69 @@ export function btObservations(id: string): BTObservation[] {
     sensor_id: SENSOR, observed_at: d.last_seen - i * 25_000,
   }));
 }
+
+// ---- Watchlist + presence (demo) ----
+const PRESENCE_GAP = 5 * 60_000;
+
+export const watchlist: WatchView[] = [];
+
+function demoDwell(ss: PresenceSession[], since: number, now: number): number {
+  let total = 0;
+  for (const x of ss) {
+    const start = Math.max(x.start, since);
+    const end = x.ongoing && now > x.end ? now : x.end;
+    if (end > start) total += end - start;
+  }
+  return total;
+}
+
+export function sessions(id: string, since?: number): DeviceSessions {
+  const now = Date.now();
+  const from = since ?? now - 24 * 3600_000;
+  const times = btObservations(id).map((o) => o.observed_at).sort((a, b) => a - b).filter((t) => t >= from);
+  const ss: PresenceSession[] = [];
+  if (times.length > 0) {
+    let start = times[0]!, prev = times[0]!, n = 1;
+    const flush = (ongoing: boolean) => {
+      const end = prev;
+      const dur = (ongoing && now > end ? now : end) - start;
+      ss.push({ start, end, duration_ms: Math.max(0, dur), sightings: n, ongoing });
+    };
+    for (const t of times.slice(1)) {
+      if (t === prev) continue;
+      if (t - prev > PRESENCE_GAP) { flush(false); start = t; n = 1; } else n++;
+      prev = t;
+    }
+    flush(now - prev <= PRESENCE_GAP);
+  }
+  const last = times.length ? times[times.length - 1]! : 0;
+  return { now, since: from, present: last > 0 && now - last <= PRESENCE_GAP, sessions: ss, dwell_ms: demoDwell(ss, from, now) };
+}
+
+export function addWatch(d: BTDevice, label: string): WatchEntry {
+  const now = Date.now();
+  const s = sessions(d.id);
+  const existing = watchlist.find((x) => x.id === d.id);
+  if (existing) {
+    existing.label = label;
+    return existing;
+  }
+  const w: WatchView = {
+    id: d.id, transport: d.transport, address: d.address, address_type: d.address_type,
+    label, added_at: now, present: s.present, state_since: now, last_eval_at: now,
+    device: d, last_seen: d.last_seen, sessions_24h: s.sessions.length, dwell_ms_24h: s.dwell_ms,
+  };
+  watchlist.unshift(w);
+  return w;
+}
+
+export function removeWatch(id: string): void {
+  const i = watchlist.findIndex((x) => x.id === id);
+  if (i >= 0) watchlist.splice(i, 1);
+}
+
+// Two labelled demo devices are already watched.
+for (const d of btDevices.slice(0, 2)) addWatch(d, "");
 
 export const btStatus: BTStatus = {
   sensors: [{ sensor_id: SENSOR, mode: "wifi", state: "idle", classic_devices: btDevices.filter((d) => d.transport === "classic").length, ble_devices: btDevices.filter((d) => d.transport === "ble").length,
